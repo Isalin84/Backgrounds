@@ -1,0 +1,2471 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gradient Studio · Best Practice AI</title>
+<link rel="icon" href="https://raw.githubusercontent.com/Isalin84/assets/main/media/BP%20CircleBlue.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Caveat:wght@400;700&family=Comfortaa:wght@300;400;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Golos+Text:wght@400;500;600;700;800;900&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Inter:wght@100;200;300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;1,400&family=Lobster&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Manrope:wght@200;300;400;500;600;700;800&family=Marck+Script&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Montserrat:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Nunito:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,400&family=Oswald:wght@200;300;400;500;600;700&family=Pacifico&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Raleway:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Righteous&family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Space+Grotesk:wght@300;400;500;600;700&family=Unbounded:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+/* ---------------------------------------------------------------------------
+   Best Practice brand tokens, v3.0 §18. Values are fixed by the brand book —
+   no shades picked by eye. Every UI colour below maps onto one of them.
+   --------------------------------------------------------------------------- */
+:root{
+  --navy:#0B1D3A; --steel:#1E3A5F; --gold:#D4AF37; --gold-deep:#B8952C;
+  --paper:#FAF9F6; --mist:#F1EFE9; --ink:#232C3D;
+  --muted:#5E687C; --faint:#9AA3B2;
+  --verde:#1F6F5C; --amber:#D98324; --carmine:#A63446; --cyan:#2AA9C4;
+
+  --bg:var(--navy); --panel:var(--navy); --panel2:var(--steel); --line:var(--steel);
+  --txt:var(--paper); --dim:var(--faint); --dim2:var(--muted);
+  --acc:var(--gold); --err:var(--carmine);
+  --r:2px;                                   /* v3: almost a right angle */
+  --font:'Montserrat','Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--txt);
+  font:13px/1.45 var(--font);
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+
+/* ---------- layout ---------- */
+#app{display:grid;grid-template-columns:1fr 340px;height:100vh}
+#app.collapsed{grid-template-columns:1fr 0}
+
+/* ---------- stage ---------- */
+#stage{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  padding:32px;overflow:hidden;background:var(--navy);
+}
+#frame{
+  position:relative;box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 0 1px rgba(250,249,246,.14);
+  border-radius:var(--r);overflow:hidden;background:#000;
+}
+#gl{display:block;width:100%;height:100%}
+#overlay{position:absolute;inset:0;overflow:hidden}
+
+/* text layers */
+.tl{
+  position:absolute;cursor:move;white-space:pre;outline:none;
+  transform-origin:center center;user-select:none;
+  padding:2px 4px;margin:-2px -4px;
+}
+.tl.sel{box-shadow:0 0 0 1px var(--acc),0 0 0 4px rgba(91,140,255,.18)}
+.tl.editing{cursor:text;user-select:text}
+.tl.hidden{display:none}
+#guides{position:absolute;inset:0;pointer-events:none}
+#guides div{position:absolute;background:var(--acc);opacity:.9}
+#guides .v{width:1px;top:0;bottom:0}
+#guides .h{height:1px;left:0;right:0}
+
+/* mesh point handles */
+#handles{position:absolute;inset:0}
+.hnd{
+  position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.5);
+  cursor:grab;
+}
+.hnd:active{cursor:grabbing}
+#handles.off{display:none}
+
+/* stage HUD */
+#hud{
+  position:absolute;left:16px;bottom:14px;display:flex;gap:6px;align-items:center;
+  font-size:11px;color:var(--dim);pointer-events:none;
+}
+#hud b{color:var(--txt);font-weight:500}
+#stagebar{position:absolute;left:16px;top:14px;display:flex;gap:6px;align-items:center}
+#collapse{position:absolute;right:14px;top:14px;z-index:5}
+
+/* ---------- panel ---------- */
+#panel{
+  background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+#app.collapsed #panel{display:none}
+#phead{
+  padding:12px 14px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;
+}
+#phead h1{font-size:13px;font-weight:600;margin:0;letter-spacing:.2px;flex:1}
+#phead h1 span{color:var(--dim2);font-weight:400}
+#pbody{overflow-y:auto;overflow-x:hidden;flex:1;padding-bottom:24px}
+#pbody::-webkit-scrollbar{width:9px}
+#pbody::-webkit-scrollbar-thumb{background:#2b323c;border-radius:9px;border:2px solid var(--panel)}
+#pbody::-webkit-scrollbar-track{background:transparent}
+
+/* sections */
+.sec{border-bottom:1px solid var(--line)}
+.sec>summary{
+  list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:8px;
+  font-size:12px;font-weight:600;letter-spacing:.3px;color:var(--txt);user-select:none;
+}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary:hover{background:var(--panel2)}
+.sec>summary .arw{color:var(--dim2);transition:transform .15s;font-size:9px}
+.sec[open]>summary .arw{transform:rotate(90deg)}
+.sec>summary .ttl{flex:1}
+.secbody{padding:4px 14px 14px}
+
+/* rows */
+.row{display:flex;align-items:center;gap:8px;margin:7px 0;min-height:22px}
+.row>label{flex:0 0 96px;color:var(--dim);font-size:11.5px;line-height:1.25}
+.row.wide>label{flex:0 0 auto}
+.row .ctl{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.val{flex:0 0 44px;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* range */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;margin:0
+}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--steel);border-radius:0}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;border-radius:0;background:var(--paper);
+  margin-top:-5px;transition:background .12s
+}
+input[type=range]:hover::-webkit-slider-thumb{background:var(--gold)}
+input[type=range]:active::-webkit-slider-thumb{background:var(--gold-deep)}
+
+/* color */
+input[type=color]{
+  -webkit-appearance:none;appearance:none;width:26px;height:22px;padding:0;border:none;
+  background:transparent;cursor:pointer;border-radius:var(--r);overflow:hidden;flex:0 0 auto
+}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:1px solid rgba(250,249,246,.28);border-radius:var(--r)}
+
+/* text/number/select */
+input[type=text],input[type=number],select,textarea{
+  background:rgba(11,29,58,.6);border:1px solid var(--steel);border-radius:var(--r);
+  padding:4px 7px;min-width:0;width:100%;font-size:12px
+}
+input[type=number]{-moz-appearance:textfield}
+select{cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5'><path d='M0 0h8L4 5z' fill='%239AA3B2'/></svg>");
+  background-repeat:no-repeat;background-position:right 8px center;padding-right:22px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+textarea{resize:vertical;min-height:44px;font-size:12px;line-height:1.4}
+
+/* checkbox */
+.chk{position:relative;display:inline-flex;align-items:center;cursor:pointer;flex:0 0 auto}
+.chk input{position:absolute;opacity:0;width:0;height:0}
+.chk i{
+  width:30px;height:16px;border-radius:0;background:var(--steel);display:block;position:relative;
+  transition:background .15s
+}
+.chk i::after{
+  content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;
+  background:var(--faint);transition:transform .15s,background .15s
+}
+.chk input:checked + i{background:rgba(212,175,55,.28)}
+.chk input:checked + i::after{transform:translateX(14px);background:var(--gold)}
+
+/* buttons — v3 §18: gold primary with navy label, gold-deep on hover, no glow */
+.btn{
+  background:transparent;border:1px solid var(--steel);border-radius:var(--r);padding:5px 10px;
+  cursor:pointer;font-size:12px;font-weight:500;transition:.13s;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px
+}
+.btn:hover{border-color:var(--gold);color:var(--gold)}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--gold);border-color:var(--gold);color:var(--navy);font-weight:700}
+.btn.pri:hover{background:var(--gold-deep);border-color:var(--gold-deep);color:var(--navy)}
+.btn.sm{padding:3px 7px;font-size:11px}
+.btn.ico{padding:4px 7px;line-height:1}
+.btn.dgr:hover{border-color:var(--carmine);color:var(--carmine)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btnrow{display:flex;gap:6px;margin:8px 0}
+.btnrow>*{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+
+/* list items (stops / points / texts) */
+.item{
+  background:rgba(30,58,95,.35);border:1px solid var(--steel);border-radius:var(--r);
+  padding:8px 9px;margin:7px 0
+}
+.item.sel{border-color:var(--gold)}
+.ihead{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.ihead .nm{flex:1;font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.ihead .nm b{color:var(--txt);font-weight:500}
+.item .row>label{flex:0 0 74px}
+
+.hint{font-size:11px;color:var(--dim2);line-height:1.5;margin:6px 0}
+.hint code{background:var(--steel);padding:1px 4px;border-radius:var(--r);font-size:10.5px;color:var(--paper)}
+.tag{font-size:10px;color:var(--dim2);border:1px solid var(--line);border-radius:var(--r);padding:1px 5px}
+
+/* preset chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+.chip{
+  border:1px solid var(--steel);border-radius:var(--r);padding:3px 9px;font-size:11px;
+  cursor:pointer;background:rgba(30,58,95,.35);transition:.13s;display:flex;align-items:center;gap:6px
+}
+.chip:hover{border-color:var(--gold);color:var(--gold)}
+.chip i{width:9px;height:9px;display:block}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+  background:var(--steel);border:1px solid var(--gold);border-radius:var(--r);padding:9px 16px;
+  font-size:12.5px;box-shadow:0 12px 34px rgba(0,0,0,.55);opacity:0;pointer-events:none;
+  transition:.22s;z-index:99;max-width:70vw;text-align:center;color:var(--paper)
+}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#toast.err{border-color:var(--carmine);color:#ffb3ad}
+
+.sep{height:1px;background:var(--line);margin:12px 0}
+.lbl{font-size:11px;color:var(--dim2);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 4px}
+
+/* ---------- Best Practice credit (brand book v3 §18, mandatory footer) ---------- */
+#pfoot{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;text-decoration:none;
+  padding:8px 14px 8px 8px;border-top:1px solid var(--steel);background:var(--navy);
+  transition:background .15s;
+}
+#pfoot:hover{background:var(--steel)}
+/* 60 px is the brand's screen minimum — below it the wordmark inside the disc
+   stops being legible, and the mark may not be taken apart to shrink it. */
+#pfoot img{height:60px;width:auto;display:block;flex:0 0 auto}
+#pfoot .txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+#pfoot .made{font-size:11.5px;font-weight:600;color:var(--paper);letter-spacing:.2px}
+#pfoot .site{font-size:11.5px;font-weight:500;color:var(--gold)}
+#pfoot:hover .site{color:var(--gold-deep)}
+</style>
+
+<div id="app">
+  <div id="stage">
+    <div id="stagebar">
+      <button class="btn sm" id="btnPlay" title="Пробел">⏸ Пауза</button>
+      <button class="btn sm" id="btnRandom" title="R">🎲 Случайно</button>
+      <button class="btn sm" id="btnFit">Вписать</button>
+    </div>
+    <button class="btn sm ico" id="collapse" title="Скрыть панель">▸</button>
+    <div id="frame">
+      <canvas id="gl"></canvas>
+      <div id="overlay">
+        <div id="handles" class="off"></div>
+        <div id="guides"></div>
+      </div>
+    </div>
+    <div id="hud"><b id="hudSize">—</b> · <span id="hudFps">—</span></div>
+  </div>
+
+  <div id="panel">
+    <div id="phead">
+      <h1>Gradient Studio</h1>
+      <button class="btn sm ico" id="btnUndo" title="⌘Z">↶</button>
+      <button class="btn sm ico" id="btnRedo" title="⇧⌘Z">↷</button>
+    </div>
+    <div id="pbody"></div>
+    <a id="pfoot" href="https://bestpracticeai.ru" target="_blank" rel="noopener"
+       title="Best Practice AI — bestpracticeai.ru">
+      <img alt="Best Practice"
+           src="https://raw.githubusercontent.com/Isalin84/assets/main/media/BP%20CircleBlue.png"
+           onerror="this.remove()">
+      <span class="txt">
+        <span class="made">Создано с Best Practice AI</span>
+        <span class="site">bestpracticeai.ru</span>
+      </span>
+    </a>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   SHADERS
+   ========================================================================== */
+
+const VERT = `#version 300 es
+void main(){
+  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const FRAG = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+#define MAXS 6
+#define MAXP 8
+#define MAXW 10
+
+uniform vec2  u_res;
+uniform float u_time;
+uniform float u_pxScale;      // render height / canvas height -> grain keeps its size
+
+// --- gradient
+uniform int   u_gradOn;
+uniform float u_angle;
+uniform int   u_space;        // 0 = sRGB-linear, 1 = OKLab
+uniform int   u_stopN;
+uniform vec3  u_stopC[MAXS];
+uniform float u_stopP[MAXS];
+uniform float u_gradScale;
+uniform int   u_gradType;     // 0 linear, 1 radial, 2 conic, 3 mirrored
+
+// --- mesh points
+uniform int   u_meshOn;
+uniform int   u_ptN;
+uniform vec3  u_ptC[MAXP];
+uniform vec2  u_ptXY[MAXP];
+uniform float u_ptR[MAXP];
+uniform float u_ptI[MAXP];
+uniform float u_meshStrength;
+uniform float u_meshFalloff;
+uniform float u_meshDrift;
+
+// --- flow / domain warp
+uniform float u_flowAmt;
+uniform float u_flowScale;
+uniform float u_flowCurl;
+uniform float u_flowSpeed;
+uniform int   u_flowOct;
+
+// --- waves (3D ribbons)
+uniform int   u_wvOn;
+uniform int   u_wvN;
+uniform float u_wvAngle;
+uniform float u_wvAmp;
+uniform float u_wvFreq;
+uniform float u_wvPhase;
+uniform float u_wvOffset;
+uniform float u_wvSpread;
+uniform float u_wvLineGap;
+uniform float u_wvLineW;
+uniform float u_wvLineSoft;
+uniform float u_wvFillA;
+uniform float u_wvLineA;
+uniform float u_wvDepth;
+uniform float u_wvWarp;
+uniform float u_wvSpeed;
+uniform float u_wvSeed;
+uniform float u_wvRough;
+uniform float u_wvLines;
+uniform float u_wvLayerPhase;
+uniform vec3  u_wvCA;
+uniform vec3  u_wvCB;
+uniform vec3  u_wvCL;
+uniform int   u_wvLineTint;   // 1 = line colour derives from fill
+
+// --- blinds
+uniform int   u_blOn;
+uniform int   u_blMode;       // 0 darken 1 lighten 2 colour 3 cut-to-gradient
+uniform float u_blAngle;
+uniform float u_blGap;
+uniform float u_blWidth;
+uniform float u_blSoft;
+uniform float u_blOpacity;
+uniform float u_blWarp;
+uniform float u_blFade;
+uniform vec3  u_blColor;
+
+// --- post
+uniform float u_bright, u_contrast, u_sat, u_hue;
+uniform float u_vig, u_vigSoft;
+uniform float u_grain, u_grainSize, u_grainShadow, u_grainAnim;
+uniform int   u_dither;
+
+const float TAU = 6.28318530718;
+
+/* ---------- colour space ---------- */
+vec3 srgb2lin(vec3 c){
+  return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(0.04045, c));
+}
+vec3 lin2srgb(vec3 c){
+  c = max(c, 0.0);
+  return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4))-0.055, step(0.0031308, c));
+}
+vec3 lin2oklab(vec3 c){
+  float l = 0.4122214708*c.r + 0.5363325363*c.g + 0.0514459929*c.b;
+  float m = 0.2119034982*c.r + 0.6806995451*c.g + 0.1073969566*c.b;
+  float s = 0.0883024619*c.r + 0.2817188376*c.g + 0.6299787005*c.b;
+  vec3 v = pow(max(vec3(l,m,s), 0.0), vec3(1.0/3.0));
+  return vec3(
+    0.2104542553*v.x + 0.7936177850*v.y - 0.0040720468*v.z,
+    1.9779984951*v.x - 2.4285922050*v.y + 0.4505937099*v.z,
+    0.0259040371*v.x + 0.7827717662*v.y - 0.8086757660*v.z);
+}
+vec3 oklab2lin(vec3 c){
+  float l = c.x + 0.3963377774*c.y + 0.2158037573*c.z;
+  float m = c.x - 0.1055613458*c.y - 0.0638541728*c.z;
+  float s = c.x - 0.0894841775*c.y - 1.2914855480*c.z;
+  l = l*l*l; m = m*m*m; s = s*s*s;
+  return vec3(
+     4.0767416621*l - 3.3077115913*m + 0.2309699292*s,
+    -1.2684380046*l + 2.6097574011*m - 0.3413193965*s,
+    -0.0041960863*l - 0.7034186147*m + 1.7076147010*s);
+}
+// mix two linear-RGB colours, optionally through OKLab
+vec3 cmix(vec3 a, vec3 b, float t){
+  if(u_space == 1) return oklab2lin(mix(lin2oklab(a), lin2oklab(b), t));
+  return mix(a, b, t);
+}
+
+/* ---------- noise ---------- */
+vec3 permute(vec3 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
+float snoise(vec2 v){
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                     -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v -   i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+  m = m*m; m = m*m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+float fbm(vec2 p, int oct){
+  float v = 0.0, a = 0.5, n = 0.0;
+  for(int i = 0; i < 6; i++){
+    if(i >= oct) break;
+    v += a * snoise(p);
+    n += a; p = p * 2.03 + vec2(1.7, -3.1); a *= 0.5;
+  }
+  return v / max(n, 1e-4);
+}
+float hash21(vec2 p){
+  p = fract(p * vec2(233.34, 851.73));
+  p += dot(p, p + 23.45);
+  return fract(p.x * p.y);
+}
+
+/* ---------- helpers ---------- */
+vec2 rot(vec2 p, float a){
+  float s = sin(a), c = cos(a);
+  return vec2(c*p.x - s*p.y, s*p.x + c*p.y);
+}
+
+// the shared flow field, reused by gradient, waves and blinds
+vec2 flowField(vec2 p){
+  float t = u_time * u_flowSpeed;
+  vec2 sp = p * u_flowScale;
+  vec2 q = vec2(fbm(sp + vec2(0.0, t), u_flowOct),
+                fbm(sp + vec2(5.2, 1.3) - vec2(t, 0.0), u_flowOct));
+  vec2 r = vec2(fbm(sp + 3.0*q + vec2(1.7, 9.2) + t*0.4, u_flowOct),
+                fbm(sp + 3.0*q + vec2(8.3, 2.8) - t*0.4, u_flowOct));
+  return mix(q, r, u_flowCurl);
+}
+
+float gradAxis(vec2 p){
+  vec2 d = rot(p, radians(u_angle));
+  float t;
+  if(u_gradType == 1){                       // radial
+    t = length(p) * 1.4;
+  } else if(u_gradType == 2){                // conic
+    t = atan(d.y, d.x) / TAU + 0.5;
+  } else if(u_gradType == 3){                // mirrored linear
+    t = abs(d.x) * 2.0;
+  } else {                                   // linear
+    t = d.x + 0.5;
+  }
+  return (t - 0.5) * u_gradScale + 0.5;
+}
+
+/* Height of one "wire" of the ribbon surface. Purely analytic: cheap enough to
+   evaluate several times per pixel, which is what the 3-D bunching needs. */
+float wvSurf(float x, float ph, float t){
+  float f = u_wvFreq * TAU;
+  return sin(x*f + ph + t) * 0.55
+       + sin(x*f*0.53 - ph*1.7 - t*0.72) * 0.30
+       + sin(x*f*2.17 + ph*0.6 + t*1.3) * u_wvRough * 0.30
+       + sin(x*f*3.41 - ph*0.9 - t*0.9) * u_wvRough * 0.18;
+}
+
+vec3 gradientAt(float t){
+  vec3 c = u_stopC[0];
+  for(int i = 0; i < MAXS - 1; i++){
+    if(i + 1 >= u_stopN) break;
+    float a = u_stopP[i], b = u_stopP[i+1];
+    float k = clamp((t - a) / max(b - a, 1e-4), 0.0, 1.0);
+    c = cmix(c, u_stopC[i+1], k);
+  }
+  return c;
+}
+
+/* ==========================================================================
+   MAIN
+   ========================================================================== */
+void main(){
+  vec2 uv  = gl_FragCoord.xy / u_res;
+  uv.y = 1.0 - uv.y;                          // top-left origin, matches DOM
+  float aspect = u_res.x / u_res.y;
+  vec2 p = (uv - 0.5) * vec2(aspect, 1.0);    // centred, aspect-corrected
+
+  vec2 flow = flowField(p);
+  vec2 pw = p + flow * u_flowAmt;             // warped position
+
+  /* --- 1. base gradient --- */
+  vec3 col = vec3(0.0);
+  if(u_gradOn == 1) col = gradientAt(clamp(gradAxis(pw), 0.0, 1.0));
+  vec3 baseCol = col;
+
+  /* --- 2. mesh colour points --- */
+  if(u_meshOn == 1){
+    for(int i = 0; i < MAXP; i++){
+      if(i >= u_ptN) break;
+      float fi = float(i);
+      vec2 c = (u_ptXY[i] - 0.5) * vec2(aspect, 1.0);
+      c += u_meshDrift * vec2(
+        sin(u_time * (0.17 + fi * 0.043) + fi * 2.1),
+        cos(u_time * (0.13 + fi * 0.037) + fi * 1.3));
+      float d = length(pw - c) / max(u_ptR[i], 1e-3);
+      float w = smoothstep(1.0, 0.0, d);
+      w = pow(w, max(u_meshFalloff, 0.05)) * u_ptI[i] * u_meshStrength;
+      col = cmix(col, u_ptC[i], clamp(w, 0.0, 1.0));
+    }
+  }
+
+  /* --- 3. wave ribbons (fake 3D) --- */
+  if(u_wvOn == 1){
+    vec2 wp = rot(p, radians(u_wvAngle));
+    /* The flow may only bend x. Displacing y by more than one wire spacing tears
+       the wire-index field apart and the ribbons collapse into fingerprint noise. */
+    float x = wp.x + flow.x * u_wvWarp;
+    float y = wp.y + 0.5;
+    float t = u_time * u_wvSpeed;
+    float fwY = fwidth(y) * 1.3;
+
+    for(int i = 0; i < MAXW; i++){
+      if(i >= u_wvN) break;
+      float fi = float(i);
+      float dep = u_wvN > 1 ? fi / float(u_wvN - 1) : 1.0;   // 0 = far, 1 = near
+      float near = mix(1.0 - u_wvDepth * 0.45, 1.0, dep);
+
+      float base = u_wvOffset + u_wvSpread * dep;
+      float phB  = u_wvSeed + u_wvLayerPhase * fi;
+      float amp  = u_wvAmp * near;
+      float gap  = max(u_wvLineGap, 1e-4) * near;
+
+      // leading edge of the ribbon = wire number zero
+      float surf = base + amp * wvSurf(x, phB, t);
+      float inside = smoothstep(surf - fwY, surf + fwY, y);
+
+      vec3 fill = cmix(u_wvCA, u_wvCB, dep);
+      col = cmix(col, fill, inside * u_wvFillA);
+
+      /* Wire-index field. Each successive wire is drawn with the surface phase
+         advanced a little, so the stack reads as one folded 3-D sheet rather than
+         a flat set of parallel curves. One relaxation step recovers the index. */
+      // twist is specified for the whole band, so adding wires never tangles them
+      float dph = u_wvPhase / max(u_wvLines, 1.0);
+      float s = (y - base) / gap;
+      s = (y - base - amp * wvSurf(x, phB + s * dph, t)) / gap;
+
+      float fws = max(fwidth(s), 1e-5);
+      float d = abs(fract(s + 0.5) - 0.5);
+      float hw = clamp(u_wvLineW, 0.0, 0.9) * 0.5;
+      float line = 1.0 - smoothstep(hw, hw + fws * 1.2 + u_wvLineSoft * 0.35, d);
+      line *= smoothstep(0.55, 0.16, fws);                     // no moiré when wires < 2 px
+      line *= smoothstep(-0.7, 0.5, s);                        // start at the leading edge
+      line *= 1.0 - smoothstep(u_wvLines * 0.65, u_wvLines, s); // fade out after N wires
+
+      vec3 lc = (u_wvLineTint == 1) ? cmix(fill, vec3(1.0), 0.6) : u_wvCL;
+      float la = u_wvLineA * mix(1.0 - u_wvDepth * 0.5, 1.0, dep);
+      col = cmix(col, lc, clamp(line * la, 0.0, 1.0));
+    }
+  }
+
+  /* --- 4. blinds / шторки --- */
+  if(u_blOn == 1){
+    vec2 bp = rot(p, radians(u_blAngle)) + flow * u_blWarp;
+    float period = max(u_blGap, 0.5) / 1000.0;
+    float coord = bp.x / period;
+    float f = abs(fract(coord) - 0.5) * 2.0;          // 0 at stripe centre
+    float half_ = clamp(u_blWidth, 0.001, 1.0);
+    float soft = u_blSoft + fwidth(coord) * 1.6;
+    float m = 1.0 - smoothstep(half_ - soft, half_ + soft, f);
+    // optional fade across the frame so stripes dissolve toward one side
+    m *= mix(1.0, smoothstep(1.0, 0.0, uv.x), u_blFade);
+    float a = m * u_blOpacity;
+
+    if(u_blMode == 0)      col = mix(col, col * 0.12, a);
+    else if(u_blMode == 1) col = mix(col, 1.0 - (1.0 - col) * 0.25, a);
+    else if(u_blMode == 2) col = cmix(col, u_blColor, a);
+    else                   col = cmix(col, baseCol, a);
+  }
+
+  /* --- 5. post, in display space --- */
+  vec3 o = lin2srgb(col);
+
+  o = (o - 0.5) * (1.0 + u_contrast) + 0.5 + u_bright;
+  float lum = dot(o, vec3(0.2126, 0.7152, 0.0722));
+  o = mix(vec3(lum), o, 1.0 + u_sat);
+  if(abs(u_hue) > 0.001){
+    float a = radians(u_hue);
+    float c = cos(a), s = sin(a);
+    mat3 hm = mat3(
+      0.213 + c*0.787 - s*0.213, 0.213 - c*0.213 + s*0.143, 0.213 - c*0.213 - s*0.787,
+      0.715 - c*0.715 - s*0.715, 0.715 + c*0.285 + s*0.140, 0.715 - c*0.715 + s*0.715,
+      0.072 - c*0.072 + s*0.928, 0.072 - c*0.072 - s*0.283, 0.072 + c*0.928 + s*0.072);
+    o = hm * o;
+  }
+
+  if(u_vig > 0.001){
+    float d = length((uv - 0.5) * vec2(aspect, 1.0)) * 1.55;
+    o *= 1.0 - u_vig * smoothstep(u_vigSoft, 1.0, d);
+  }
+
+  if(u_grain > 0.0001){
+    // floor() is what actually gives the grain a size: hash21() of a continuous
+    // coordinate is white noise no matter what you divide it by.
+    vec2 gp = floor(gl_FragCoord.xy / max(u_grainSize * u_pxScale, 0.35));
+    float g = hash21(gp + fract(u_time * 13.0) * u_grainAnim * 37.0) - 0.5;
+    float w = mix(1.0, 1.0 - smoothstep(0.0, 0.85, dot(o, vec3(0.33))), u_grainShadow);
+    o += g * u_grain * w;
+  }
+
+  if(u_dither == 1){
+    ivec2 ip = ivec2(gl_FragCoord.xy) & 3;
+    const float bay[16] = float[16](
+       0.0,  8.0,  2.0, 10.0,
+      12.0,  4.0, 14.0,  6.0,
+       3.0, 11.0,  1.0,  9.0,
+      15.0,  7.0, 13.0,  5.0);
+    o += (bay[ip.y * 4 + ip.x] / 16.0 - 0.5) / 255.0;
+  }
+
+  fragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+}`;
+
+/* ==========================================================================
+   STATE
+   ========================================================================== */
+
+const SCHEMA_VERSION = 1;
+
+function defaults(){
+  return {
+    version: SCHEMA_VERSION,
+    canvas: { w: 1920, h: 1080 },
+    anim:   { playing: true, phase: 0 },
+    grad: {
+      on: 1, type: 0, angle: 135, space: 1, scale: 1,
+      stops: [ {c:'#140a2e', p:0}, {c:'#3d1e8f', p:0.45}, {c:'#ff4d8d', p:1} ]
+    },
+    mesh: {
+      on: 1, strength: 1, falloff: 1.7, drift: 0.05,
+      pts: [
+        { c:'#5b2cff', x:0.18, y:0.22, r:0.55, i:0.9 },
+        { c:'#ff3d7f', x:0.82, y:0.30, r:0.48, i:0.85 },
+        { c:'#00d4ff', x:0.30, y:0.86, r:0.44, i:0.6  },
+        { c:'#ffb347', x:0.90, y:0.88, r:0.36, i:0.45 }
+      ]
+    },
+    flow:  { amt:0.22, scale:0.75, curl:0.35, speed:0.25, oct:2 },
+    wv: {
+      on:0, n:5, angle:-10, amp:0.07, freq:0.7, phase:0.9, layerPhase:1.0,
+      offset:0.1, spread:0.65, gap:0.013, lines:14, lineW:0.15, soft:0.35,
+      fillA:0.92, lineA:0.75, depth:0.6, warp:0.04, speed:0.22,
+      seed:0, rough:0.3, cA:'#0e0524', cB:'#3a0f63', cL:'#ff5fa2', tint:1
+    },
+    bl: {
+      on:0, mode:0, angle:0, gap:40, width:0.45, soft:0.06,
+      opacity:0.35, warp:0, fade:0, color:'#000000'
+    },
+    post:  { bright:0, contrast:0, sat:0, hue:0, vig:0.28, vigSoft:0.35 },
+    grain: { amt:0.05, size:2, shadow:0.4, anim:0 },
+    dither: 1,
+    texts: [],
+    exp: { fmt:'png', q:0.92, scale:1, dpi:300, htmlAnim:1, credit:1 }
+  };
+}
+
+let S = defaults();
+let selText = -1;          // index of selected text layer
+let selPoint = -1;         // index of selected mesh point
+
+/* --- tiny path helpers, used by the control binder --- */
+const getPath = (o, path) => path.split('.').reduce((a,k)=> a==null ? a : a[k], o);
+function setPath(o, path, v){
+  const ks = path.split('.'); const last = ks.pop();
+  let t = o; for(const k of ks) t = t[k];
+  t[last] = v;
+}
+
+/* ==========================================================================
+   COLOUR UTILS
+   ========================================================================== */
+
+function hex2rgb(h){
+  h = String(h||'#000').replace('#','');
+  if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  const n = parseInt(h.slice(0,6), 16) || 0;
+  return [ (n>>16 & 255)/255, (n>>8 & 255)/255, (n & 255)/255 ];
+}
+const s2l = c => c <= 0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+const hex2lin = h => hex2rgb(h).map(s2l);
+function rgb2hex(r,g,b){
+  const f = v => Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0');
+  return '#' + f(r) + f(g) + f(b);
+}
+function hsl2hex(h, s, l){
+  h = ((h % 360) + 360) % 360; s = Math.max(0,Math.min(1,s)); l = Math.max(0,Math.min(1,l));
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(Math.min(k(n)-3, 9-k(n)), 1));
+  return rgb2hex(f(0), f(8), f(4));
+}
+
+/* ==========================================================================
+   WEBGL
+   ========================================================================== */
+
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', {
+  antialias: false, alpha: false, depth: false, stencil: false,
+  preserveDrawingBuffer: true, premultipliedAlpha: false,
+  powerPreference: 'high-performance'
+});
+
+if(!gl){
+  document.body.innerHTML =
+    '<div style="padding:40px;font:15px/1.6 sans-serif;color:#dfe4ec">' +
+    '<h2>WebGL2 недоступен</h2><p>Браузер не поддерживает WebGL2 — приложение работать не сможет. ' +
+    'Откройте файл в актуальном Chrome, Safari или Firefox.</p></div>';
+  throw new Error('no webgl2');
+}
+
+function compile(type, src){
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
+    const log = gl.getShaderInfoLog(sh);
+    console.error(log, src.split('\n').map((l,i)=>(i+1)+': '+l).join('\n'));
+    throw new Error('shader: ' + log);
+  }
+  return sh;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+
+const ULOC = new Map();
+function U(n){
+  if(!ULOC.has(n)) ULOC.set(n, gl.getUniformLocation(prog, n));
+  return ULOC.get(n);
+}
+const u1i = (n,v) => gl.uniform1i(U(n), v|0);
+const u1f = (n,v) => gl.uniform1f(U(n), v);
+const u2f = (n,a,b) => gl.uniform2f(U(n), a, b);
+const u3f = (n,v) => gl.uniform3f(U(n), v[0], v[1], v[2]);
+const u1fv = (n,a) => gl.uniform1fv(U(n), a);
+const u2fv = (n,a) => gl.uniform2fv(U(n), a);
+const u3fv = (n,a) => gl.uniform3fv(U(n), a);
+
+const MAXS = 6, MAXP = 8, MAXW = 10;
+
+/** Push the whole state into uniforms. Called once per drawn frame. */
+function pushUniforms(w, h, time){
+  u2f('u_res', w, h);
+  u1f('u_time', time);
+  u1f('u_pxScale', h / Math.max(S.canvas.h, 1));
+
+  // gradient
+  const g = S.grad;
+  u1i('u_gradOn', g.on); u1i('u_gradType', g.type); u1i('u_space', g.space);
+  u1f('u_angle', g.angle); u1f('u_gradScale', g.scale);
+  const sn = Math.min(g.stops.length, MAXS);
+  u1i('u_stopN', sn);
+  const sc = new Float32Array(MAXS*3), sp = new Float32Array(MAXS);
+  for(let i=0;i<sn;i++){
+    const l = hex2lin(g.stops[i].c);
+    sc[i*3]=l[0]; sc[i*3+1]=l[1]; sc[i*3+2]=l[2];
+    sp[i]=g.stops[i].p;
+  }
+  u3fv('u_stopC[0]', sc); u1fv('u_stopP[0]', sp);
+
+  // mesh
+  const m = S.mesh;
+  u1i('u_meshOn', m.on);
+  u1f('u_meshStrength', m.strength); u1f('u_meshFalloff', m.falloff); u1f('u_meshDrift', m.drift);
+  const pn = Math.min(m.pts.length, MAXP);
+  u1i('u_ptN', pn);
+  const pc = new Float32Array(MAXP*3), pxy = new Float32Array(MAXP*2),
+        pr = new Float32Array(MAXP), pi = new Float32Array(MAXP);
+  for(let i=0;i<pn;i++){
+    const q = m.pts[i], l = hex2lin(q.c);
+    pc[i*3]=l[0]; pc[i*3+1]=l[1]; pc[i*3+2]=l[2];
+    pxy[i*2]=q.x; pxy[i*2+1]=q.y; pr[i]=q.r; pi[i]=q.i;
+  }
+  u3fv('u_ptC[0]', pc); u2fv('u_ptXY[0]', pxy);
+  u1fv('u_ptR[0]', pr); u1fv('u_ptI[0]', pi);
+
+  // flow
+  const f = S.flow;
+  u1f('u_flowAmt', f.amt); u1f('u_flowScale', f.scale);
+  u1f('u_flowCurl', f.curl); u1f('u_flowSpeed', f.speed); u1i('u_flowOct', f.oct);
+
+  // waves
+  const w2 = S.wv;
+  u1i('u_wvOn', w2.on); u1i('u_wvN', Math.min(w2.n, MAXW));
+  u1f('u_wvAngle', w2.angle); u1f('u_wvAmp', w2.amp); u1f('u_wvFreq', w2.freq);
+  u1f('u_wvPhase', w2.phase); u1f('u_wvOffset', w2.offset); u1f('u_wvSpread', w2.spread);
+  u1f('u_wvLineGap', w2.gap); u1f('u_wvLineW', w2.lineW); u1f('u_wvLineSoft', w2.soft);
+  u1f('u_wvFillA', w2.fillA); u1f('u_wvLineA', w2.lineA); u1f('u_wvDepth', w2.depth);
+  u1f('u_wvWarp', w2.warp); u1f('u_wvSpeed', w2.speed); u1f('u_wvSeed', w2.seed);
+  u1f('u_wvRough', w2.rough); u1i('u_wvLineTint', w2.tint);
+  u1f('u_wvLines', w2.lines); u1f('u_wvLayerPhase', w2.layerPhase);
+  u3f('u_wvCA', hex2lin(w2.cA)); u3f('u_wvCB', hex2lin(w2.cB)); u3f('u_wvCL', hex2lin(w2.cL));
+
+  // blinds
+  const b = S.bl;
+  u1i('u_blOn', b.on); u1i('u_blMode', b.mode);
+  u1f('u_blAngle', b.angle); u1f('u_blGap', b.gap); u1f('u_blWidth', b.width);
+  u1f('u_blSoft', b.soft); u1f('u_blOpacity', b.opacity);
+  u1f('u_blWarp', b.warp); u1f('u_blFade', b.fade);
+  u3f('u_blColor', hex2lin(b.color));
+
+  // post
+  const po = S.post, gr = S.grain;
+  u1f('u_bright', po.bright); u1f('u_contrast', po.contrast);
+  u1f('u_sat', po.sat); u1f('u_hue', po.hue);
+  u1f('u_vig', po.vig); u1f('u_vigSoft', po.vigSoft);
+  u1f('u_grain', gr.amt); u1f('u_grainSize', gr.size);
+  u1f('u_grainShadow', gr.shadow); u1f('u_grainAnim', gr.anim ? 1 : 0);
+  u1i('u_dither', S.dither);
+}
+
+/** Render one frame into the GL canvas at w x h. */
+function drawGL(w, h, time){
+  if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+  gl.viewport(0, 0, w, h);
+  pushUniforms(w, h, time);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/* ==========================================================================
+   PREVIEW LOOP
+   ========================================================================== */
+
+const frameEl  = document.getElementById('frame');
+const stageEl  = document.getElementById('stage');
+const hudSize  = document.getElementById('hudSize');
+const hudFps   = document.getElementById('hudFps');
+
+let clock = 0, lastT = performance.now(), needsDraw = true;
+let fpsAcc = 0, fpsN = 0, fpsShown = 0;
+
+const invalidate = () => { needsDraw = true; };
+
+/** Fit the preview frame inside the stage, preserving canvas aspect. */
+function fitStage(){
+  const pad = 64;
+  const aw = stageEl.clientWidth - pad, ah = stageEl.clientHeight - pad;
+  const k = Math.min(aw / S.canvas.w, ah / S.canvas.h, 1);
+  const w = Math.max(80, Math.round(S.canvas.w * k));
+  const h = Math.max(60, Math.round(S.canvas.h * k));
+  frameEl.style.width = w + 'px';
+  frameEl.style.height = h + 'px';
+  hudSize.textContent = S.canvas.w + ' × ' + S.canvas.h + '  (' + Math.round(k*100) + '%)';
+  restyleAllTexts();                             // font-size follows the preview scale
+  invalidate();
+}
+
+function tick(now){
+  const dt = Math.min((now - lastT) / 1000, 0.1);
+  lastT = now;
+  if(S.anim.playing){ clock += dt; needsDraw = true; }
+
+  if(needsDraw){
+    needsDraw = false;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(2, Math.round(frameEl.clientWidth  * dpr));
+    const h = Math.max(2, Math.round(frameEl.clientHeight * dpr));
+    drawGL(w, h, clock + S.anim.phase);
+  }
+
+  fpsAcc += dt; fpsN++;
+  if(fpsAcc >= 0.5){
+    fpsShown = Math.round(fpsN / fpsAcc);
+    hudFps.textContent = fpsShown + ' fps';
+    fpsAcc = 0; fpsN = 0;
+  }
+  requestAnimationFrame(tick);
+}
+
+new ResizeObserver(fitStage).observe(stageEl);
+
+/* ==========================================================================
+   UI TOOLKIT
+   ========================================================================== */
+
+function el(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  if(attrs) for(const k in attrs){
+    if(k === 'class') n.className = attrs[k];
+    else if(k === 'html') n.innerHTML = attrs[k];
+    else if(k === 'text') n.textContent = attrs[k];
+    else if(k.startsWith('on')) n.addEventListener(k.slice(2), attrs[k]);
+    else if(attrs[k] !== undefined && attrs[k] !== null) n.setAttribute(k, attrs[k]);
+  }
+  for(const c of kids) if(c != null) n.append(c);
+  return n;
+}
+
+let toastTimer = 0;
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'on' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.className = isErr ? 'err' : ''; }, isErr ? 4200 : 2000);
+}
+
+/* history + autosave, both debounced so dragging a slider stays cheap */
+let hist = [], histAt = -1, histTimer = 0, saveTimer = 0, restoring = false;
+
+function snapshot(){ return JSON.stringify(serialize()); }
+function pushHistory(){
+  if(restoring) return;
+  const s = snapshot();
+  if(hist[histAt] === s) return;
+  hist = hist.slice(0, histAt + 1);
+  hist.push(s);
+  if(hist.length > 60) hist.shift();
+  histAt = hist.length - 1;
+  updateHistBtns();
+}
+function updateHistBtns(){
+  document.getElementById('btnUndo').disabled = histAt <= 0;
+  document.getElementById('btnRedo').disabled = histAt >= hist.length - 1;
+}
+function goHistory(d){
+  const i = histAt + d;
+  if(i < 0 || i >= hist.length) return;
+  histAt = i;
+  restoring = true;
+  try { deserialize(JSON.parse(hist[i])); } finally { restoring = false; }
+  rebuildPanel(); rebuildTexts(); fitStage(); updateHistBtns();
+}
+
+/** Call after ANY state mutation. Cheap on the hot path, heavy work deferred. */
+function changed(structural){
+  invalidate();
+  if(structural){ rebuildTexts(); }
+  clearTimeout(histTimer); histTimer = setTimeout(pushHistory, 420);
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveLocal, 700);
+}
+
+/* --- control factories --- */
+const SYNCS = [];
+
+function fmtNum(v, step){
+  const d = step >= 1 ? 0 : String(step).split('.')[1]?.length || 2;
+  return v.toFixed(d);
+}
+
+function row(parent, label, ...ctl){
+  const r = el('div', {class:'row'}, label != null ? el('label', {text:label}) : null,
+                el('div', {class:'ctl'}, ...ctl));
+  parent.append(r);
+  return r;
+}
+
+function sld(parent, label, path, min, max, step, opt){
+  opt = opt || {};
+  const inp = el('input', {type:'range', min, max, step});
+  const out = el('span', {class:'val'});
+  const sync = ()=>{
+    const v = getPath(S, path);
+    inp.value = v;
+    out.textContent = (opt.fmt ? opt.fmt(v) : fmtNum(+v, step)) + (opt.unit || '');
+  };
+  inp.addEventListener('input', ()=>{
+    setPath(S, path, parseFloat(inp.value));
+    out.textContent = (opt.fmt ? opt.fmt(+inp.value) : fmtNum(+inp.value, step)) + (opt.unit || '');
+    if(opt.on) opt.on();
+    changed();
+  });
+  SYNCS.push(sync); sync();
+  row(parent, label, inp, out);
+  return inp;
+}
+
+function clr(parent, label, path, opt){
+  opt = opt || {};
+  const inp = el('input', {type:'color'});
+  const txt = el('input', {type:'text', spellcheck:'false'});
+  const sync = ()=>{ const v = getPath(S, path); inp.value = v; txt.value = v; };
+  const apply = v =>{
+    if(!/^#[0-9a-f]{6}$/i.test(v)) return;
+    setPath(S, path, v.toLowerCase()); inp.value = v; txt.value = v;
+    if(opt.on) opt.on();
+    changed();
+  };
+  inp.addEventListener('input', ()=> apply(inp.value));
+  txt.addEventListener('change', ()=> apply(txt.value.trim()));
+  SYNCS.push(sync); sync();
+  row(parent, label, inp, txt);
+  return inp;
+}
+
+function tgl(parent, label, path, opt){
+  opt = opt || {};
+  const inp = el('input', {type:'checkbox'});
+  const wrap = el('label', {class:'chk'}, inp, el('i'));
+  const sync = ()=>{ inp.checked = !!getPath(S, path); };
+  inp.addEventListener('change', ()=>{
+    setPath(S, path, inp.checked ? 1 : 0);
+    if(opt.on) opt.on();
+    changed(opt.structural);
+  });
+  SYNCS.push(sync); sync();
+  row(parent, label, wrap, el('span', {class:'val'}));
+  return inp;
+}
+
+function sel(parent, label, path, options, opt){
+  opt = opt || {};
+  const s = el('select');
+  for(const [v, t] of options) s.append(el('option', {value:v, text:t}));
+  const sync = ()=>{ s.value = String(getPath(S, path)); };
+  s.addEventListener('change', ()=>{
+    const v = s.value;
+    setPath(S, path, /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
+    if(opt.on) opt.on();
+    changed(opt.structural);
+  });
+  SYNCS.push(sync); sync();
+  row(parent, label, s);
+  return s;
+}
+
+function num(parent, label, path, min, max, opt){
+  opt = opt || {};
+  const inp = el('input', {type:'number', min, max, step: opt.step || 1});
+  const sync = ()=>{ inp.value = getPath(S, path); };
+  inp.addEventListener('change', ()=>{
+    let v = parseFloat(inp.value);
+    if(!isFinite(v)) v = min;
+    v = Math.max(min, Math.min(max, Math.round(v)));
+    inp.value = v; setPath(S, path, v);
+    if(opt.on) opt.on();
+    changed();
+  });
+  SYNCS.push(sync); sync();
+  return inp;
+}
+
+/* --- section shell --- */
+const openSecs = new Set(['Полотно','Градиент','Мешевые точки','Экспорт']);
+
+function section(parent, title, build, badgePath){
+  const open = openSecs.has(title);
+  const d = el('details', {class:'sec'});
+  if(open) d.open = true;
+  const sum = el('summary', null,
+    el('span', {class:'arw', text:'▶'}),
+    el('span', {class:'ttl', text:title}));
+  d.append(sum);
+  const body = el('div', {class:'secbody'});
+  d.append(body);
+  d.addEventListener('toggle', ()=>{ d.open ? openSecs.add(title) : openSecs.delete(title); });
+  if(badgePath){
+    const t = el('label', {class:'chk'});
+    const i = el('input', {type:'checkbox'});
+    t.append(i, el('i'));
+    t.addEventListener('click', e => e.stopPropagation());
+    const sync = ()=>{ i.checked = !!getPath(S, badgePath); };
+    i.addEventListener('change', ()=>{ setPath(S, badgePath, i.checked ? 1 : 0); changed(); });
+    SYNCS.push(sync); sync();
+    sum.append(t);
+  }
+  parent.append(d);
+  build(body);
+  return d;
+}
+
+/* ==========================================================================
+   PANEL
+   ========================================================================== */
+
+const SIZE_PRESETS = [
+  ['1920x1080','FHD 16:9 — 1920×1080'],
+  ['2560x1440','QHD 16:9 — 2560×1440'],
+  ['3840x2160','4K UHD — 3840×2160'],
+  ['1280x720','HD 16:9 — 1280×720'],
+  ['1080x1080','Квадрат — 1080×1080'],
+  ['1080x1350','Пост 4:5 — 1080×1350'],
+  ['1080x1920','Сторис 9:16 — 1080×1920'],
+  ['2480x3508','A4 300dpi — 2480×3508'],
+  ['3508x2480','A4 альбом — 3508×2480'],
+  ['1600x900','Хедер — 1600×900'],
+  ['custom','Свой размер…']
+];
+
+function rebuildPanel(){
+  const body = document.getElementById('pbody');
+  const scroll = body.scrollTop;
+  SYNCS.length = 0;
+  body.textContent = '';
+
+  buildCanvas(body);
+  buildGradient(body);
+  buildMesh(body);
+  buildFlow(body);
+  buildWaves(body);
+  buildBlinds(body);
+  buildPost(body);
+  buildText(body);
+  buildPresets(body);
+  buildExport(body);
+
+  body.scrollTop = scroll;
+}
+
+/* --- полотно и анимация --- */
+function buildCanvas(p){
+  section(p, 'Полотно', b=>{
+    const w = num(b, null, 'canvas.w', 16, 16384, {on:fitStage});
+    const h = num(b, null, 'canvas.h', 16, 16384, {on:fitStage});
+    const ps = el('select');
+    for(const [v,t] of SIZE_PRESETS) ps.append(el('option',{value:v,text:t}));
+    const syncPs = ()=>{
+      const key = S.canvas.w + 'x' + S.canvas.h;
+      ps.value = SIZE_PRESETS.some(([v])=>v===key) ? key : 'custom';
+    };
+    ps.addEventListener('change', ()=>{
+      if(ps.value === 'custom') return;
+      const [a,c] = ps.value.split('x').map(Number);
+      S.canvas.w = a; S.canvas.h = c;
+      w.value = a; h.value = c;
+      fitStage(); changed();
+    });
+    SYNCS.push(syncPs); syncPs();
+    row(b, 'Пресет', ps);
+    row(b, 'Размер, px', w, el('span',{class:'val',text:'×'}), h);
+    const swap = el('button', {class:'btn sm', text:'⇄ Повернуть холст', onclick:()=>{
+      const t = S.canvas.w; S.canvas.w = S.canvas.h; S.canvas.h = t;
+      w.value = S.canvas.w; h.value = S.canvas.h; syncPs(); fitStage(); changed();
+    }});
+    b.append(el('div', {class:'btnrow'}, swap));
+
+    b.append(el('div',{class:'lbl',text:'Анимация'}));
+    sld(b, 'Скорость', 'flow.speed', 0, 2, 0.01);
+    sld(b, 'Фаза времени', 'anim.phase', 0, 60, 0.05, {unit:' с'});
+    b.append(el('div', {class:'hint',
+      html:'Экспорт берёт текущий кадр. Поставьте паузу (<code>Пробел</code>) и ловите момент фазой.'}));
+  });
+}
+
+/* --- градиент --- */
+function buildGradient(p){
+  section(p, 'Градиент', b=>{
+    sel(b, 'Тип', 'grad.type', [[0,'Линейный'],[1,'Радиальный'],[2,'Конический'],[3,'Зеркальный']]);
+    sld(b, 'Угол', 'grad.angle', 0, 360, 1, {unit:'°'});
+    sld(b, 'Растяжение', 'grad.scale', 0.2, 3, 0.01);
+    sel(b, 'Смешивание', 'grad.space', [[1,'OKLab — чище'],[0,'sRGB — как в CSS']]);
+
+    b.append(el('div',{class:'lbl',text:'Цветовые стопы'}));
+    const list = el('div');
+    b.append(list);
+    S.grad.stops.forEach((st, i)=>{
+      const it = el('div', {class:'item'});
+      const head = el('div', {class:'ihead'},
+        el('span', {class:'nm', html:'Стоп <b>'+(i+1)+'</b>'}),
+        el('button', {class:'btn sm ico dgr', text:'✕', title:'Удалить',
+          disabled: S.grad.stops.length <= 2 ? '' : null,
+          onclick:()=>{ S.grad.stops.splice(i,1); changed(); rebuildPanel(); }}));
+      it.append(head);
+      list.append(it);
+      clr(it, 'Цвет', 'grad.stops.'+i+'.c');
+      sld(it, 'Позиция', 'grad.stops.'+i+'.p', 0, 1, 0.005);
+    });
+
+    b.append(el('div', {class:'btnrow'},
+      el('button', {class:'btn sm', text:'+ Стоп',
+        disabled: S.grad.stops.length >= MAXS ? '' : null,
+        onclick:()=>{
+          const st = S.grad.stops;
+          st.push({ c: st[st.length-1].c, p: 1 });
+          st.sort((a,c)=>a.p-c.p);
+          changed(); rebuildPanel();
+        }}),
+      el('button', {class:'btn sm', text:'⇄ Развернуть', onclick:()=>{
+        S.grad.stops = S.grad.stops.map(s=>({c:s.c, p:+(1-s.p).toFixed(4)})).reverse();
+        changed(); rebuildPanel();
+      }}),
+      el('button', {class:'btn sm', text:'CSS', title:'Скопировать CSS-градиент',
+        onclick:copyCSS})
+    ));
+  }, 'grad.on');
+}
+
+/* --- мешевые точки --- */
+function buildMesh(p){
+  section(p, 'Мешевые точки', b=>{
+    sld(b, 'Сила', 'mesh.strength', 0, 1.5, 0.01);
+    sld(b, 'Резкость спада', 'mesh.falloff', 0.2, 6, 0.05);
+    sld(b, 'Дрейф', 'mesh.drift', 0, 0.5, 0.005);
+
+    const hnd = el('input', {type:'checkbox'});
+    hnd.checked = !document.getElementById('handles').classList.contains('off');
+    hnd.addEventListener('change', ()=>{
+      document.getElementById('handles').classList.toggle('off', !hnd.checked);
+      if(hnd.checked) rebuildHandles();
+    });
+    row(b, 'Маркеры на превью', el('label',{class:'chk'}, hnd, el('i')));
+    b.append(el('div',{class:'hint',text:'Маркеры можно таскать прямо по картинке.'}));
+
+    b.append(el('div',{class:'lbl',text:'Точки'}));
+    S.mesh.pts.forEach((pt, i)=>{
+      const it = el('div', {class:'item' + (selPoint===i?' sel':'')});
+      it.append(el('div', {class:'ihead'},
+        el('span', {class:'nm', html:'Точка <b>'+(i+1)+'</b>',
+          onclick:()=>{ selPoint = selPoint===i ? -1 : i; rebuildPanel(); rebuildHandles(); }}),
+        el('button', {class:'btn sm ico dgr', text:'✕',
+          disabled: S.mesh.pts.length <= 1 ? '' : null,
+          onclick:()=>{ S.mesh.pts.splice(i,1); selPoint=-1; changed(); rebuildPanel(); rebuildHandles(); }})));
+      b.append(it);
+      clr(it, 'Цвет', 'mesh.pts.'+i+'.c', {on:rebuildHandles});
+      sld(it, 'X', 'mesh.pts.'+i+'.x', -0.3, 1.3, 0.005, {on:rebuildHandles});
+      sld(it, 'Y', 'mesh.pts.'+i+'.y', -0.3, 1.3, 0.005, {on:rebuildHandles});
+      sld(it, 'Радиус', 'mesh.pts.'+i+'.r', 0.05, 1.6, 0.01);
+      sld(it, 'Плотность', 'mesh.pts.'+i+'.i', 0, 1, 0.01);
+    });
+
+    b.append(el('div', {class:'btnrow'},
+      el('button', {class:'btn sm', text:'+ Точка',
+        disabled: S.mesh.pts.length >= MAXP ? '' : null,
+        onclick:()=>{
+          S.mesh.pts.push({ c: hsl2hex(Math.random()*360, 0.7, 0.55),
+                            x: Math.random()*0.8+0.1, y: Math.random()*0.8+0.1,
+                            r: 0.4, i: 0.7 });
+          changed(); rebuildPanel(); rebuildHandles();
+        }})));
+  }, 'mesh.on');
+}
+
+/* --- поток --- */
+function buildFlow(p){
+  section(p, 'Поток и искажение', b=>{
+    b.append(el('div',{class:'hint',text:'Это то, из-за чего цвета и линии «плавают».'}));
+    sld(b, 'Сила', 'flow.amt', 0, 1.2, 0.005);
+    sld(b, 'Масштаб', 'flow.scale', 0.1, 8, 0.05);
+    sld(b, 'Завихрение', 'flow.curl', 0, 1, 0.01);
+    sld(b, 'Детализация', 'flow.oct', 1, 6, 1);
+    sld(b, 'Скорость', 'flow.speed', 0, 2, 0.01);
+  });
+}
+
+/* --- волны --- */
+function buildWaves(p){
+  section(p, 'Волны 3D', b=>{
+    b.append(el('div',{class:'hint',
+      text:'Слои-ленты с контурными линиями. Ближние перекрывают дальние — это и даёт объём.'}));
+    sld(b, 'Слоёв', 'wv.n', 1, MAXW, 1);
+    sld(b, 'Наклон', 'wv.angle', -60, 60, 0.5, {unit:'°'});
+    sld(b, 'Амплитуда', 'wv.amp', 0, 0.4, 0.002);
+    sld(b, 'Частота', 'wv.freq', 0.1, 4, 0.01);
+    sld(b, 'Кручение', 'wv.phase', -1.5, 1.5, 0.005);
+    sld(b, 'Сдвиг слоёв', 'wv.layerPhase', 0, 3, 0.01);
+    sld(b, 'Начало', 'wv.offset', -0.5, 1.2, 0.005);
+    sld(b, 'Разброс слоёв', 'wv.spread', 0, 1.5, 0.005);
+    sld(b, 'Неровность', 'wv.rough', 0, 1.5, 0.01);
+    sld(b, 'Сила 3D', 'wv.depth', 0, 1, 0.01);
+    sld(b, 'Влияние потока', 'wv.warp', 0, 0.6, 0.005);
+    sld(b, 'Скорость', 'wv.speed', 0, 2, 0.01);
+    sld(b, 'Seed', 'wv.seed', 0, 20, 0.05);
+    b.append(el('div',{class:'hint',
+      text:'«Кручение» — насколько каждая следующая линия провёрнута относительно предыдущей. Именно оно сгущает линии на изгибах и создаёт объём.'}));
+
+    b.append(el('div',{class:'lbl',text:'Линии'}));
+    sld(b, 'Линий в слое', 'wv.lines', 1, 60, 1);
+    sld(b, 'Шаг линий', 'wv.gap', 0.002, 0.08, 0.0005);
+    sld(b, 'Толщина', 'wv.lineW', 0.01, 0.9, 0.005);
+    sld(b, 'Мягкость', 'wv.soft', 0, 1.5, 0.01);
+    sld(b, 'Яркость линий', 'wv.lineA', 0, 1, 0.01);
+    tgl(b, 'Цвет от заливки', 'wv.tint');
+    clr(b, 'Цвет линий', 'wv.cL');
+
+    b.append(el('div',{class:'lbl',text:'Заливка лент'}));
+    sld(b, 'Плотность', 'wv.fillA', 0, 1, 0.01);
+    clr(b, 'Дальние', 'wv.cA');
+    clr(b, 'Ближние', 'wv.cB');
+  }, 'wv.on');
+}
+
+/* --- шторки --- */
+function buildBlinds(p){
+  section(p, 'Шторки', b=>{
+    sel(b, 'Режим', 'bl.mode',
+      [[0,'Затемнение'],[1,'Осветление'],[2,'Свой цвет'],[3,'Сквозь — чистый градиент']]);
+    sld(b, 'Угол', 'bl.angle', -90, 90, 0.5, {unit:'°'});
+    sld(b, 'Расстояние', 'bl.gap', 2, 400, 1);
+    sld(b, 'Ширина полосы', 'bl.width', 0.02, 1, 0.005);
+    sld(b, 'Мягкость края', 'bl.soft', 0, 0.6, 0.005);
+    sld(b, 'Непрозрачность', 'bl.opacity', 0, 1, 0.01);
+    sld(b, 'Изгиб потоком', 'bl.warp', 0, 0.5, 0.005);
+    sld(b, 'Затухание', 'bl.fade', 0, 1, 0.01);
+    clr(b, 'Цвет', 'bl.color');
+    b.append(el('div',{class:'hint',
+      text:'«Расстояние» — шаг между полосами, «ширина» — какую долю шага занимает сама полоса.'}));
+  }, 'bl.on');
+}
+
+/* --- пост и зерно --- */
+function buildPost(p){
+  section(p, 'Цвет и зерно', b=>{
+    sld(b, 'Яркость', 'post.bright', -0.5, 0.5, 0.005);
+    sld(b, 'Контраст', 'post.contrast', -0.8, 1.2, 0.005);
+    sld(b, 'Насыщенность', 'post.sat', -1, 1.5, 0.01);
+    sld(b, 'Оттенок', 'post.hue', -180, 180, 1, {unit:'°'});
+    sld(b, 'Виньетка', 'post.vig', 0, 1.2, 0.01);
+    sld(b, 'Радиус виньетки', 'post.vigSoft', 0, 1, 0.01);
+
+    b.append(el('div',{class:'lbl',text:'Зернистость'}));
+    sld(b, 'Зерно', 'grain.amt', 0, 0.5, 0.002);
+    sld(b, 'Размер зерна', 'grain.size', 1, 12, 0.25, {unit:' px'});
+    sld(b, 'Только в тенях', 'grain.shadow', 0, 1, 0.01);
+    tgl(b, 'Шевелится', 'grain.anim');
+    tgl(b, 'Убрать полошение', 'dither');
+    b.append(el('div',{class:'hint',
+      text:'Зерно на 0 — абсолютно ровное изображение. Размер зерна не зависит от разрешения экспорта.'}));
+  });
+}
+
+/* ==========================================================================
+   MESH POINT HANDLES ON THE PREVIEW
+   ========================================================================== */
+
+const handlesEl = document.getElementById('handles');
+
+function rebuildHandles(){
+  if(handlesEl.classList.contains('off')){ handlesEl.textContent = ''; return; }
+  handlesEl.textContent = '';
+  S.mesh.pts.forEach((pt, i)=>{
+    const h = el('div', {class:'hnd', title:'Точка ' + (i+1)});
+    h.style.left = (pt.x * 100) + '%';
+    h.style.top  = (pt.y * 100) + '%';
+    h.style.background = pt.c;
+    h.addEventListener('pointerdown', e=>{
+      e.preventDefault(); e.stopPropagation();
+      h.setPointerCapture(e.pointerId);
+      selPoint = i;
+      const r = frameEl.getBoundingClientRect();
+      const move = ev=>{
+        pt.x = +(((ev.clientX - r.left) / r.width)).toFixed(4);
+        pt.y = +(((ev.clientY - r.top) / r.height)).toFixed(4);
+        h.style.left = (pt.x*100) + '%'; h.style.top = (pt.y*100) + '%';
+        invalidate();
+      };
+      const up = ()=>{
+        h.removeEventListener('pointermove', move);
+        h.removeEventListener('pointerup', up);
+        changed(); rebuildPanel();
+      };
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', up);
+    });
+    handlesEl.append(h);
+  });
+}
+
+/* ==========================================================================
+   TEXT LAYERS
+   ========================================================================== */
+
+const FONTS = [
+  ['Montserrat','Montserrat — BP заголовки'], ['Lora','Lora — BP текст'],
+  ['Inter','Inter'], ['Manrope','Manrope'],
+  ['Golos Text','Golos Text'], ['Unbounded','Unbounded'],
+  ['Playfair Display','Playfair Display'], ['Cormorant Garamond','Cormorant Garamond'],
+  ['Oswald','Oswald'], ['Raleway','Raleway'], ['Rubik','Rubik'],
+  ['Space Grotesk','Space Grotesk (lat)'], ['JetBrains Mono','JetBrains Mono'],
+  ['IBM Plex Sans','IBM Plex Sans'], ['Nunito','Nunito'], ['Comfortaa','Comfortaa'],
+  ['Merriweather','Merriweather'], ['Caveat','Caveat'], ['Marck Script','Marck Script'],
+  ['Lobster','Lobster'], ['Pacifico','Pacifico (lat)'], ['Bebas Neue','Bebas Neue (lat)'],
+  ['Anton','Anton (lat)'], ['Archivo Black','Archivo Black (lat)'], ['Righteous','Righteous (lat)'],
+  ['system-ui','Системный'], ['Helvetica Neue','Helvetica Neue'], ['Georgia','Georgia'],
+  ['Times New Roman','Times New Roman'], ['Courier New','Courier New'],
+  ['Futura','Futura'], ['Impact','Impact']
+];
+const BLENDS = ['normal','multiply','screen','overlay','soft-light','hard-light',
+                'difference','exclusion','color-dodge','luminosity'];
+
+function newText(txt){
+  return {
+    text: txt || 'Новый текст', font: 'Inter', size: 96, weight: 700,
+    italic: 0, ls: 0, lh: 1.15, color: '#ffffff', opacity: 1, align: 'center',
+    rot: 0, blend: 'normal', x: 0.5, y: 0.5, hidden: 0,
+    sh: { on: 0, blur: 24, dx: 0, dy: 8, c: '#000000', a: 0.45 }
+  };
+}
+
+const overlayEl = document.getElementById('overlay');
+const guidesEl  = document.getElementById('guides');
+
+/** preview px per canvas px */
+const previewScale = () => frameEl.clientWidth / S.canvas.w;
+
+function styleText(i){
+  const t = S.texts[i];
+  const n = overlayEl.querySelector('.tl[data-i="' + i + '"]');
+  if(!t || !n) return;
+  const k = previewScale();
+  n.classList.toggle('hidden', !!t.hidden);
+  n.style.left = (t.x * 100) + '%';
+  n.style.top  = (t.y * 100) + '%';
+  n.style.transform = 'translate(-50%,-50%) rotate(' + t.rot + 'deg)';
+  n.style.fontFamily = '"' + t.font + '", sans-serif';
+  n.style.fontSize = (t.size * k) + 'px';
+  n.style.fontWeight = t.weight;
+  n.style.fontStyle = t.italic ? 'italic' : 'normal';
+  n.style.letterSpacing = (t.ls * k) + 'px';
+  n.style.lineHeight = t.lh;
+  n.style.color = t.color;
+  n.style.opacity = t.opacity;
+  n.style.textAlign = t.align;
+  n.style.mixBlendMode = t.blend;
+  n.style.textShadow = t.sh.on
+    ? (t.sh.dx*k) + 'px ' + (t.sh.dy*k) + 'px ' + (t.sh.blur*k) + 'px ' +
+      hexA(t.sh.c, t.sh.a)
+    : 'none';
+  n.classList.toggle('sel', selText === i);
+}
+
+function hexA(hex, a){
+  const [r,g,b] = hex2rgb(hex);
+  return 'rgba(' + Math.round(r*255) + ',' + Math.round(g*255) + ',' +
+         Math.round(b*255) + ',' + a + ')';
+}
+
+function rebuildTexts(){
+  overlayEl.querySelectorAll('.tl').forEach(n=>n.remove());
+  S.texts.forEach((t, i)=>{
+    const n = el('div', {class:'tl', 'data-i':i});
+    n.textContent = t.text;
+    overlayEl.insertBefore(n, handlesEl);
+    attachTextEvents(n, i);
+    styleText(i);
+  });
+}
+
+function restyleAllTexts(){ S.texts.forEach((_, i)=> styleText(i)); }
+
+const SNAPS = [0, 1/3, 0.5, 2/3, 1];
+function attachTextEvents(n, i){
+  n.addEventListener('pointerdown', e=>{
+    if(n.classList.contains('editing')) return;
+    e.preventDefault();
+    if(selText !== i){ selText = i; rebuildPanel(); restyleAllTexts(); }
+    n.setPointerCapture(e.pointerId);
+    const t = S.texts[i];
+    const r = frameEl.getBoundingClientRect();
+    const ox = e.clientX - (r.left + t.x * r.width);
+    const oy = e.clientY - (r.top  + t.y * r.height);
+    const move = ev=>{
+      let nx = (ev.clientX - ox - r.left) / r.width;
+      let ny = (ev.clientY - oy - r.top)  / r.height;
+      guidesEl.textContent = '';
+      if(!ev.altKey){
+        for(const s of SNAPS){
+          if(Math.abs(nx - s) < 0.006){ nx = s; guidesEl.append(mkGuide('v', s)); }
+          if(Math.abs(ny - s) < 0.006){ ny = s; guidesEl.append(mkGuide('h', s)); }
+        }
+      }
+      t.x = +nx.toFixed(4); t.y = +ny.toFixed(4);
+      styleText(i);
+    };
+    const up = ()=>{
+      n.removeEventListener('pointermove', move);
+      n.removeEventListener('pointerup', up);
+      guidesEl.textContent = '';
+      changed(); rebuildPanel();
+    };
+    n.addEventListener('pointermove', move);
+    n.addEventListener('pointerup', up);
+  });
+
+  n.addEventListener('dblclick', ()=>{
+    n.classList.add('editing');
+    n.contentEditable = 'plaintext-only';
+    n.focus();
+    document.getSelection().selectAllChildren(n);
+  });
+  n.addEventListener('blur', ()=>{
+    if(!n.classList.contains('editing')) return;
+    n.classList.remove('editing');
+    n.contentEditable = 'false';
+    S.texts[i].text = n.innerText.replace(/\n$/, '');
+    changed(); rebuildPanel();
+  });
+  n.addEventListener('keydown', e=>{
+    if(e.key === 'Escape'){ n.blur(); }
+    e.stopPropagation();
+  });
+}
+function mkGuide(kind, pos){
+  const d = el('div', {class:kind});
+  if(kind === 'v') d.style.left = (pos*100) + '%';
+  else d.style.top = (pos*100) + '%';
+  return d;
+}
+
+overlayEl.addEventListener('pointerdown', e=>{
+  if(e.target === overlayEl || e.target === guidesEl){
+    if(selText !== -1){ selText = -1; rebuildPanel(); restyleAllTexts(); }
+  }
+});
+
+/* --- text section in the panel --- */
+function buildText(p){
+  section(p, 'Текст', b=>{
+    b.append(el('div', {class:'btnrow'},
+      el('button', {class:'btn sm pri', text:'+ Добавить строку', onclick:()=>{
+        S.texts.push(newText('Строка ' + (S.texts.length + 1)));
+        selText = S.texts.length - 1;
+        changed(true); rebuildPanel();
+      }})));
+
+    if(!S.texts.length){
+      b.append(el('div', {class:'hint',
+        text:'Пока пусто. Добавьте строку, затем таскайте её по картинке мышью. Двойной клик — редактировать текст, Alt — тащить без прилипания.'}));
+      return;
+    }
+
+    S.texts.forEach((t, i)=>{
+      const open = selText === i;
+      const it = el('div', {class:'item' + (open ? ' sel' : '')});
+      it.append(el('div', {class:'ihead'},
+        el('span', {class:'nm', html:'<b>' + escapeHtml(t.text.split('\n')[0].slice(0,22) || '—') + '</b>',
+          onclick:()=>{ selText = open ? -1 : i; rebuildPanel(); restyleAllTexts(); }}),
+        el('button', {class:'btn sm ico', text: t.hidden ? '◌' : '●', title:'Скрыть',
+          onclick:()=>{ t.hidden = t.hidden ? 0 : 1; changed(); rebuildPanel(); styleText(i); }}),
+        el('button', {class:'btn sm ico', text:'↑', disabled: i===0 ? '' : null,
+          onclick:()=>{ S.texts.splice(i-1,0,S.texts.splice(i,1)[0]); selText=i-1; changed(true); rebuildPanel(); }}),
+        el('button', {class:'btn sm ico', text:'⧉', title:'Дублировать',
+          onclick:()=>{ const c = JSON.parse(JSON.stringify(t)); c.y = Math.min(1, c.y + 0.06);
+                        S.texts.splice(i+1, 0, c); selText = i+1; changed(true); rebuildPanel(); }}),
+        el('button', {class:'btn sm ico dgr', text:'✕',
+          onclick:()=>{ S.texts.splice(i,1); selText = -1; changed(true); rebuildPanel(); }})));
+      b.append(it);
+      if(!open) return;
+
+      const ta = el('textarea', {spellcheck:'false'});
+      ta.value = t.text;
+      ta.addEventListener('input', ()=>{
+        t.text = ta.value;
+        const n = overlayEl.querySelector('.tl[data-i="'+i+'"]');
+        if(n) n.textContent = t.text;
+        changed();
+      });
+      it.append(ta);
+
+      const fs = el('select');
+      for(const [v, lbl] of FONTS) fs.append(el('option', {value:v, text:lbl}));
+      fs.value = t.font;
+      fs.addEventListener('change', ()=>{ t.font = fs.value; styleText(i); changed(); });
+      row(it, 'Шрифт', fs);
+
+      sld(it, 'Кегль', 'texts.'+i+'.size', 8, 600, 1, {on:()=>styleText(i)});
+      sld(it, 'Жирность', 'texts.'+i+'.weight', 100, 900, 100, {on:()=>styleText(i)});
+      sld(it, 'Межбуквенное', 'texts.'+i+'.ls', -20, 60, 0.5, {on:()=>styleText(i)});
+      sld(it, 'Интерлиньяж', 'texts.'+i+'.lh', 0.7, 2.5, 0.01, {on:()=>styleText(i)});
+      sld(it, 'Поворот', 'texts.'+i+'.rot', -180, 180, 0.5, {unit:'°', on:()=>styleText(i)});
+      sld(it, 'Прозрачность', 'texts.'+i+'.opacity', 0, 1, 0.01, {on:()=>styleText(i)});
+      clr(it, 'Цвет', 'texts.'+i+'.color', {on:()=>styleText(i)});
+      tgl(it, 'Курсив', 'texts.'+i+'.italic', {on:()=>styleText(i)});
+      sel(it, 'Выключка', 'texts.'+i+'.align',
+        [['left','По левому'],['center','По центру'],['right','По правому']], {on:()=>styleText(i)});
+      sel(it, 'Наложение', 'texts.'+i+'.blend', BLENDS.map(v=>[v,v]), {on:()=>styleText(i)});
+      sld(it, 'X', 'texts.'+i+'.x', -0.2, 1.2, 0.001, {on:()=>styleText(i)});
+      sld(it, 'Y', 'texts.'+i+'.y', -0.2, 1.2, 0.001, {on:()=>styleText(i)});
+
+      it.append(el('div', {class:'lbl', text:'Тень'}));
+      tgl(it, 'Включить', 'texts.'+i+'.sh.on', {on:()=>styleText(i)});
+      sld(it, 'Размытие', 'texts.'+i+'.sh.blur', 0, 200, 1, {on:()=>styleText(i)});
+      sld(it, 'Сдвиг X', 'texts.'+i+'.sh.dx', -100, 100, 1, {on:()=>styleText(i)});
+      sld(it, 'Сдвиг Y', 'texts.'+i+'.sh.dy', -100, 100, 1, {on:()=>styleText(i)});
+      sld(it, 'Плотность', 'texts.'+i+'.sh.a', 0, 1, 0.01, {on:()=>styleText(i)});
+      clr(it, 'Цвет тени', 'texts.'+i+'.sh.c', {on:()=>styleText(i)});
+    });
+
+    b.append(el('div', {class:'hint',
+      html:'Двойной клик по тексту — правка на месте. Стрелки двигают выделенное на 1px, с <code>Shift</code> — на 10px, <code>Alt</code> при перетаскивании отключает прилипание.'}));
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ==========================================================================
+   SERIALIZATION — one source of truth for JSON, HTML export, autosave, undo
+   ========================================================================== */
+
+function serialize(){
+  return JSON.parse(JSON.stringify(S));
+}
+
+/** Deep-merge a loaded object onto fresh defaults so old/partial files still open. */
+function mergeInto(dst, src){
+  for(const k in src){
+    const v = src[k];
+    if(Array.isArray(v)) dst[k] = JSON.parse(JSON.stringify(v));
+    else if(v && typeof v === 'object'){
+      if(!dst[k] || typeof dst[k] !== 'object' || Array.isArray(dst[k])) dst[k] = {};
+      mergeInto(dst[k], v);
+    } else if(v !== undefined) dst[k] = v;
+  }
+  return dst;
+}
+
+function deserialize(obj){
+  if(!obj || typeof obj !== 'object') throw new Error('не объект');
+  const fresh = defaults();
+  mergeInto(fresh, obj);
+  // sanity clamps — a hand-edited file should not be able to wedge the app
+  fresh.canvas.w = Math.max(16, Math.min(16384, Math.round(fresh.canvas.w) || 1920));
+  fresh.canvas.h = Math.max(16, Math.min(16384, Math.round(fresh.canvas.h) || 1080));
+  if(!Array.isArray(fresh.grad.stops) || fresh.grad.stops.length < 2) fresh.grad.stops = defaults().grad.stops;
+  fresh.grad.stops = fresh.grad.stops.slice(0, MAXS);
+  if(!Array.isArray(fresh.mesh.pts) || !fresh.mesh.pts.length) fresh.mesh.pts = defaults().mesh.pts;
+  fresh.mesh.pts = fresh.mesh.pts.slice(0, MAXP);
+  fresh.wv.n = Math.max(1, Math.min(MAXW, fresh.wv.n | 0));
+  if(!Array.isArray(fresh.texts)) fresh.texts = [];
+  fresh.texts = fresh.texts.map(t => mergeInto(newText(), t));
+  S = fresh;
+  selText = -1; selPoint = -1;
+  return S;
+}
+
+const LS_KEY = 'gradient-studio-v1';
+function saveLocal(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(serialize())); } catch(e){}
+}
+function loadLocal(){
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) deserialize(JSON.parse(raw));
+  } catch(e){ console.warn('autosave повреждён, беру значения по умолчанию', e); }
+}
+
+/* ==========================================================================
+   EXPORT
+   ========================================================================== */
+
+const MAX_DIM = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE) || 8192, 16384);
+
+function exportSize(){
+  const k = S.exp.scale || 1;
+  return { w: Math.round(S.canvas.w * k), h: Math.round(S.canvas.h * k) };
+}
+
+function checkSize(w, h){
+  if(w > MAX_DIM || h > MAX_DIM)
+    throw new Error('Слишком большая сторона: ' + w + '×' + h +
+      '. Максимум для этой видеокарты — ' + MAX_DIM + ' px.');
+  if(w * h > 300e6)
+    throw new Error('Слишком много пикселей (' + Math.round(w*h/1e6) + ' Мп). Уменьшите масштаб.');
+}
+
+async function ensureFonts(){
+  const jobs = [];
+  for(const t of S.texts){
+    if(t.hidden) continue;
+    const spec = (t.italic ? 'italic ' : '') + t.weight + ' 100px "' + t.font + '"';
+    jobs.push(document.fonts.load(spec, t.text || 'A').catch(()=>{}));
+  }
+  await Promise.all(jobs);
+  try { await document.fonts.ready; } catch(e){}
+}
+
+const lsSupported = (()=>{
+  try { return 'letterSpacing' in document.createElement('canvas').getContext('2d'); }
+  catch(e){ return false; }
+})();
+
+function setFont(ctx, t, size, ls){
+  ctx.font = (t.italic ? 'italic ' : '') + t.weight + ' ' + size + 'px "' + t.font + '", sans-serif';
+  if(lsSupported) ctx.letterSpacing = ls + 'px';
+}
+function lineWidthOf(ctx, s, ls){
+  if(lsSupported) return ctx.measureText(s).width;
+  let w = 0;
+  for(const ch of s) w += ctx.measureText(ch).width + ls;
+  return w;
+}
+
+/** Metrics of one text layer, in canvas-space px (S.canvas coordinates). */
+function textMetrics(t){
+  const m = document.createElement('canvas').getContext('2d');
+  setFont(m, t, t.size, t.ls);
+  const lines = String(t.text).split('\n');
+  const widths = lines.map(l => lineWidthOf(m, l, t.ls));
+  return {
+    lines, widths,
+    bw: Math.max(0, ...widths),
+    lh: t.size * t.lh,
+    bh: lines.length * t.size * t.lh
+  };
+}
+
+function drawTexts(ctx, W, H){
+  const k = W / S.canvas.w;
+  for(const t of S.texts){
+    if(t.hidden || !String(t.text).length) continue;
+    const mt = textMetrics(t);
+    const size = t.size * k, ls = t.ls * k, lh = mt.lh * k, bh = mt.bh * k, bw = mt.bw * k;
+    ctx.save();
+    ctx.globalAlpha = t.opacity;
+    ctx.globalCompositeOperation = t.blend === 'normal' ? 'source-over' : t.blend;
+    ctx.translate(t.x * W, t.y * H);
+    ctx.rotate(t.rot * Math.PI / 180);
+    setFont(ctx, t, size, ls);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = t.color;
+    if(t.sh.on){
+      ctx.shadowColor = hexA(t.sh.c, t.sh.a);
+      ctx.shadowBlur = t.sh.blur * k;
+      ctx.shadowOffsetX = t.sh.dx * k;
+      ctx.shadowOffsetY = t.sh.dy * k;
+    }
+    mt.lines.forEach((ln, i)=>{
+      const y = -bh/2 + i*lh + lh/2;
+      const w = mt.widths[i] * k;
+      let x0;                                   // left edge of this line
+      if(t.align === 'center')     x0 = -w/2;
+      else if(t.align === 'right') x0 = bw/2 - w;
+      else                          x0 = -bw/2;
+      if(lsSupported){
+        ctx.textAlign = 'left';
+        ctx.fillText(ln, x0, y);
+      } else {
+        ctx.textAlign = 'left';
+        let px = x0;
+        for(const ch of ln){ ctx.fillText(ch, px, y); px += ctx.measureText(ch).width + ls; }
+      }
+    });
+    ctx.restore();
+  }
+}
+
+/** Render the background (and optionally the text) into a fresh 2D canvas. */
+async function renderFrame(w, h, withText){
+  checkSize(w, h);
+  if(withText) await ensureFonts();
+  drawGL(w, h, clock + S.anim.phase);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(cv, 0, 0, w, h);
+  if(withText) drawTexts(ctx, w, h);
+  invalidate();                                  // restore the preview next frame
+  return c;
+}
+
+function download(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = el('a', {href:url, download:name});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+const stamp = ()=>{
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+};
+const canvasToBlob = (c, mime, q) => new Promise((res, rej)=>
+  c.toBlob(b => b ? res(b) : rej(new Error('браузер не смог закодировать ' + mime)), mime, q));
+
+async function exportRaster(mime, ext){
+  const {w, h} = exportSize();
+  const c = await renderFrame(w, h, true);
+  const blob = await canvasToBlob(c, mime, S.exp.q);
+  download(blob, 'background-' + stamp() + '.' + ext);
+  toast('Готово: ' + ext.toUpperCase() + ' ' + w + '×' + h + ' · ' + (blob.size/1048576).toFixed(2) + ' МБ');
+}
+
+async function copyPNG(){
+  if(!navigator.clipboard || !window.ClipboardItem) throw new Error('Браузер не умеет копировать картинки в буфер');
+  const {w, h} = exportSize();
+  const c = await renderFrame(w, h, true);
+  const blob = await canvasToBlob(c, 'image/png');
+  await navigator.clipboard.write([ new ClipboardItem({'image/png': blob}) ]);
+  toast('PNG скопирован в буфер');
+}
+
+/* --- SVG: raster background + real vector text --- */
+async function exportSVG(){
+  const {w, h} = exportSize();
+  const bg = await renderFrame(w, h, false);
+  const png = bg.toDataURL('image/png');
+  const W = S.canvas.w, H = S.canvas.h;               // vector coords stay in canvas units
+
+  let defs = '', body = '';
+  S.texts.forEach((t, i)=>{
+    if(t.hidden || !String(t.text).length) return;
+    const mt = textMetrics(t);
+    const cx = t.x * W, cy = t.y * H;
+    const anchor = t.align === 'center' ? 'middle' : t.align === 'right' ? 'end' : 'start';
+    const ax = t.align === 'center' ? 0 : t.align === 'right' ? mt.bw/2 : -mt.bw/2;
+    let filter = '';
+    if(t.sh.on){
+      const fid = 'sh' + i;
+      defs += '<filter id="' + fid + '" x="-50%" y="-50%" width="200%" height="200%">' +
+              '<feDropShadow dx="' + t.sh.dx + '" dy="' + t.sh.dy +
+              '" stdDeviation="' + (t.sh.blur/2) + '" flood-color="' + t.sh.c +
+              '" flood-opacity="' + t.sh.a + '"/></filter>';
+      filter = ' filter="url(#' + fid + ')"';
+    }
+    const tspans = mt.lines.map((ln, j)=>
+      '<tspan x="' + (cx + ax).toFixed(2) + '" y="' +
+      (cy - mt.bh/2 + j*mt.lh + mt.lh/2).toFixed(2) + '">' + escapeHtml(ln) + '</tspan>').join('');
+    body += '<text text-anchor="' + anchor + '" dominant-baseline="central"' +
+      ' font-family="' + escapeHtml(t.font) + ', sans-serif"' +
+      ' font-size="' + t.size + '"' +
+      ' font-weight="' + t.weight + '"' +
+      (t.italic ? ' font-style="italic"' : '') +
+      (t.ls ? ' letter-spacing="' + t.ls + '"' : '') +
+      ' fill="' + t.color + '"' +
+      (t.opacity < 1 ? ' opacity="' + t.opacity + '"' : '') +
+      (t.blend !== 'normal' ? ' style="mix-blend-mode:' + t.blend + '"' : '') +
+      (t.rot ? ' transform="rotate(' + t.rot + ' ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')"' : '') +
+      filter + '>' + tspans + '</text>';
+  });
+
+  const svg =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
+    'width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">\n' +
+    (defs ? '<defs>' + defs + '</defs>\n' : '') +
+    '<image x="0" y="0" width="' + W + '" height="' + H +
+    '" preserveAspectRatio="none" xlink:href="' + png + '"/>\n' + body + '\n</svg>\n';
+
+  download(new Blob([svg], {type:'image/svg+xml'}), 'background-' + stamp() + '.svg');
+  toast('SVG: фон растром ' + w + '×' + h + ', текст вектором');
+}
+
+/* --- PDF: single page, JPEG image, written by hand (no libraries) --- */
+async function exportPDF(){
+  const {w, h} = exportSize();
+  const c = await renderFrame(w, h, true);
+  const jpegURL = c.toDataURL('image/jpeg', Math.max(0.6, S.exp.q));
+  const bin = atob(jpegURL.split(',')[1]);
+  const img = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) img[i] = bin.charCodeAt(i);
+
+  const dpi = S.exp.dpi || 300;
+  const pw = (w * 72 / dpi).toFixed(2), ph = (h * 72 / dpi).toFixed(2);
+
+  const chunks = [];
+  let len = 0;
+  const put = data =>{
+    const b = typeof data === 'string'
+      ? Uint8Array.from(data, ch => ch.charCodeAt(0) & 255)
+      : data;
+    chunks.push(b); len += b.length; return len;
+  };
+  const offsets = [0];
+  const obj = (n, s)=>{ offsets[n] = len; put(n + ' 0 obj\n' + s + '\nendobj\n'); };
+
+  put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  obj(1, '<</Type/Catalog/Pages 2 0 R>>');
+  obj(2, '<</Type/Pages/Kids[3 0 R]/Count 1>>');
+  obj(3, '<</Type/Page/Parent 2 0 R/MediaBox[0 0 ' + pw + ' ' + ph +
+         ']/Resources<</XObject<</Im0 4 0 R>>>>/Contents 5 0 R>>');
+  offsets[4] = len;
+  put('4 0 obj\n<</Type/XObject/Subtype/Image/Width ' + w + '/Height ' + h +
+      '/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ' + img.length + '>>\nstream\n');
+  put(img);
+  put('\nendstream\nendobj\n');
+  const content = 'q ' + pw + ' 0 0 ' + ph + ' 0 0 cm /Im0 Do Q\n';
+  obj(5, '<</Length ' + content.length + '>>\nstream\n' + content + 'endstream');
+
+  const xref = len;
+  let x = 'xref\n0 6\n0000000000 65535 f \n';
+  for(let i=1;i<=5;i++) x += String(offsets[i]).padStart(10,'0') + ' 00000 n \n';
+  put(x + 'trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n' + xref + '\n%%EOF\n');
+
+  download(new Blob(chunks, {type:'application/pdf'}), 'background-' + stamp() + '.pdf');
+  toast('PDF: страница ' + pw + '×' + ph + ' pt при ' + dpi + ' dpi');
+}
+
+/* --- JSON project --- */
+function exportJSON(){
+  const data = serialize();
+  data.app = 'gradient-background-studio';
+  download(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}),
+           'background-' + stamp() + '.json');
+  toast('JSON сохранён');
+}
+function importJSON(file){
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try {
+      deserialize(JSON.parse(fr.result));
+      rebuildPanel(); rebuildTexts(); rebuildHandles(); fitStage(); pushHistory();
+      toast('Загружено: ' + file.name);
+    } catch(e){
+      toast('Не получилось прочитать файл: ' + e.message, true);
+    }
+  };
+  fr.onerror = ()=> toast('Файл не читается', true);
+  fr.readAsText(file);
+}
+
+/* --- CSS snippet --- */
+function copyCSS(){
+  const g = S.grad;
+  const stops = g.stops.map(s => s.c + ' ' + Math.round(s.p*100) + '%').join(', ');
+  const css = g.type === 1 ? 'background: radial-gradient(circle at 50% 50%, ' + stops + ');'
+            : g.type === 2 ? 'background: conic-gradient(from ' + g.angle + 'deg at 50% 50%, ' + stops + ');'
+            : 'background: linear-gradient(' + Math.round(g.angle + 90) + 'deg, ' + stops + ');';
+  navigator.clipboard.writeText(css)
+    .then(()=> toast('CSS скопирован — только базовый градиент, без меша и зерна'))
+    .catch(()=> toast('Буфер обмена недоступен', true));
+}
+
+/** Average luminance of a corner of the current frame, 0..1. Lets the credit
+    pick navy or paper instead of vanishing into a light background. */
+async function cornerLuma(fx, fy, fw, fh){
+  const c = await renderFrame(320, Math.max(2, Math.round(320 * S.canvas.h / S.canvas.w)), false);
+  const x = Math.round(fx * c.width),  w = Math.max(1, Math.round(fw * c.width));
+  const y = Math.round(fy * c.height), h = Math.max(1, Math.round(fh * c.height));
+  const d = c.getContext('2d').getImageData(x, y, w, h).data;
+  let s = 0;
+  for(let i = 0; i < d.length; i += 4)
+    s += (0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2]) / 255;
+  return s / (d.length / 4);
+}
+
+/* --- standalone HTML: same shader, same state, live --- */
+async function exportHTML(){
+  // reuse the editor's own functions so the exported page can never drift out of sync
+  const parts = [
+    ['hex2rgb', hex2rgb], ['s2l', s2l], ['hex2lin', hex2lin],
+    ['U', U], ['u1i', u1i], ['u1f', u1f], ['u2f', u2f], ['u3f', u3f],
+    ['u1fv', u1fv], ['u2fv', u2fv], ['u3fv', u3fv],
+    ['pushUniforms', pushUniforms], ['drawGL', drawGL]
+  ].map(([n, f])=>{
+    const s = f.toString();
+    return /^function\s/.test(s) ? s : 'const ' + n + ' = ' + s + ';';
+  }).join('\n');
+
+  const st = serialize();
+  const wanted = S.texts.filter(t=>!t.hidden).map(t=>t.font);
+  if(S.exp.credit) wanted.push('Montserrat');          // the credit line is set in Montserrat
+  const used = [...new Set(wanted)]
+    .filter(f => FONTS.some(([v])=>v===f) && !/^(system-ui|Helvetica Neue|Georgia|Times New Roman|Courier New|Futura|Impact)$/.test(f));
+  const fontLink = used.length
+    ? '<link href="https://fonts.googleapis.com/css2?' +
+      used.map(f=>'family=' + f.replace(/ /g,'+') + ':ital,wght@0,100..900;1,100..900').join('&') +
+      '&display=swap" rel="stylesheet">'
+    : '';
+
+  const texts = S.texts.filter(t=>!t.hidden && String(t.text).length).map(t=>
+    '<div class="t" style="' +
+    'left:' + (t.x*100) + '%;top:' + (t.y*100) + '%;' +
+    'transform:translate(-50%,-50%) rotate(' + t.rot + 'deg);' +
+    'font-family:\'' + t.font + '\',sans-serif;' +
+    'font-size:calc(var(--k) * ' + t.size + 'px);' +
+    'font-weight:' + t.weight + ';' +
+    (t.italic ? 'font-style:italic;' : '') +
+    'letter-spacing:calc(var(--k) * ' + t.ls + 'px);' +
+    'line-height:' + t.lh + ';color:' + t.color + ';opacity:' + t.opacity + ';' +
+    'text-align:' + t.align + ';mix-blend-mode:' + t.blend + ';' +
+    (t.sh.on ? 'text-shadow:calc(var(--k)*' + t.sh.dx + 'px) calc(var(--k)*' + t.sh.dy +
+               'px) calc(var(--k)*' + t.sh.blur + 'px) ' + hexA(t.sh.c, t.sh.a) + ';' : '') +
+    '">' + escapeHtml(t.text).replace(/\n/g,'<br>') + '</div>').join('\n');
+
+  // brand colours only: paper on a dark corner, navy on a light one
+  const creditColor = S.exp.credit
+    ? (await cornerLuma(0.62, 0.84, 0.36, 0.15)) > 0.5 ? '#0B1D3A' : '#FAF9F6'
+    : '#FAF9F6';
+  const credit = S.exp.credit
+    ? '<a class="bp-credit" style="color:' + creditColor + '" ' +
+      'href="https://bestpracticeai.ru" target="_blank" rel="noopener">' +
+      'Создано с <b>Best Practice AI</b></a>'
+    : '';
+
+  const html = `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gradient background</title>
+${fontLink}
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ov{position:fixed;inset:0;pointer-events:none}
+.t{position:absolute;white-space:pre;transform-origin:center center}
+.bp-credit{
+  position:fixed;right:16px;bottom:14px;z-index:2;display:flex;align-items:center;gap:7px;
+  font:500 12px/1 'Montserrat',sans-serif;text-decoration:none;opacity:.7;
+  transition:opacity .2s;
+}
+.bp-credit:hover{opacity:1}
+.bp-credit b{font-weight:700}
+</style></head><body>
+<canvas id="gl"></canvas>
+<div id="ov">
+${texts}
+</div>
+${credit}
+<script>
+"use strict";
+const VERT = ${JSON.stringify(VERT)};
+const FRAG = ${JSON.stringify(FRAG)};
+const MAXS = 6, MAXP = 8, MAXW = 10;
+let S = ${JSON.stringify(st).replace(/<\//g, '<\\/')};
+const DESIGN = { w: ${S.canvas.w}, h: ${S.canvas.h} };
+const ANIMATED = ${S.exp.htmlAnim ? 'true' : 'false'};
+
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', {antialias:false, alpha:false, depth:false, powerPreference:'high-performance'});
+if(!gl){ document.body.innerHTML = '<p style="color:#888;font:14px sans-serif;padding:20px">WebGL2 недоступен</p>'; }
+else {
+function C(t, s){ const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x);
+  if(!gl.getShaderParameter(x, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(x)); return x; }
+const prog = gl.createProgram();
+gl.attachShader(prog, C(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, C(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindVertexArray(gl.createVertexArray());
+const ULOC = new Map();
+${parts}
+
+let clock = 0, last = performance.now();
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width  = Math.max(2, Math.round(innerWidth  * dpr));
+  cv.height = Math.max(2, Math.round(innerHeight * dpr));
+  document.documentElement.style.setProperty('--k',
+    Math.min(innerWidth / DESIGN.w, innerHeight / DESIGN.h));
+}
+addEventListener('resize', resize); resize();
+
+function loop(now){
+  const dt = Math.min((now - last)/1000, 0.1); last = now;
+  if(ANIMATED) clock += dt;
+  drawGL(cv.width, cv.height, clock + S.anim.phase);
+  if(ANIMATED) requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+if(!ANIMATED) addEventListener('resize', ()=>requestAnimationFrame(loop));
+}
+<\/script></body></html>
+`;
+  download(new Blob([html], {type:'text/html'}), 'background-' + stamp() + '.html');
+  toast('HTML готов — ' + (S.exp.htmlAnim ? 'живой анимированный фон' : 'статичный кадр'));
+}
+
+/* --- export section --- */
+function buildExport(p){
+  section(p, 'Экспорт', b=>{
+    const {w, h} = exportSize();
+    const info = el('div', {class:'hint'});
+    const refresh = ()=>{
+      const s = exportSize();
+      info.innerHTML = 'На выходе <b style="color:#dfe4ec">' + s.w + ' × ' + s.h + '</b> px' +
+        (s.w > MAX_DIM || s.h > MAX_DIM ? ' — <span style="color:#ff8a84">больше предела ' + MAX_DIM + '</span>' : '');
+    };
+    sel(b, 'Масштаб', 'exp.scale', [[1,'×1'],[2,'×2'],[3,'×3'],[4,'×4'],[0.5,'×0.5']], {on:refresh});
+    sld(b, 'Качество', 'exp.q', 0.4, 1, 0.01, {fmt:v=>Math.round(v*100)+'%'});
+    b.append(info); refresh();
+
+    b.append(el('div', {class:'lbl', text:'Картинка'}));
+    b.append(el('div', {class:'grid3'},
+      el('button', {class:'btn pri', text:'PNG',  onclick:()=>guard(()=>exportRaster('image/png','png'))}),
+      el('button', {class:'btn',     text:'JPEG', onclick:()=>guard(()=>exportRaster('image/jpeg','jpg'))}),
+      el('button', {class:'btn',     text:'WebP', onclick:()=>guard(()=>exportRaster('image/webp','webp'))})));
+    b.append(el('div', {class:'grid3'},
+      el('button', {class:'btn', text:'SVG', onclick:()=>guard(exportSVG)}),
+      el('button', {class:'btn', text:'PDF', onclick:()=>guard(exportPDF)}),
+      el('button', {class:'btn', text:'⧉ Буфер', onclick:()=>guard(copyPNG)})));
+    sel(b, 'PDF, dpi', 'exp.dpi', [[300,'300 — печать'],[150,'150'],[72,'72 — экран']]);
+    b.append(el('div', {class:'hint',
+      text:'SVG: фон растром внутри файла, текст — настоящие векторные <text>. PDF — одностраничный, картинкой.'}));
+
+    b.append(el('div', {class:'lbl', text:'Проект и веб'}));
+    b.append(el('div', {class:'grid2'},
+      el('button', {class:'btn', text:'⬇ JSON', onclick:exportJSON}),
+      el('button', {class:'btn', text:'⬆ Загрузить', onclick:()=>fileInput.click()})));
+    tgl(b, 'HTML: анимация', 'exp.htmlAnim');
+    tgl(b, 'Подпись Best Practice', 'exp.credit');
+    b.append(el('div', {class:'grid2'},
+      el('button', {class:'btn', text:'⬇ HTML', onclick:()=>guard(exportHTML)}),
+      el('button', {class:'btn', text:'⧉ CSS', onclick:copyCSS})));
+    b.append(el('div', {class:'hint',
+      text:'HTML — самодостаточная страница с этим же фоном: можно положить на сайт или вставить в iframe. Подпись — только для HTML; картинки выгружаются чистыми.'}));
+  });
+}
+
+const fileInput = el('input', {type:'file', accept:'.json,application/json', style:'display:none'});
+fileInput.addEventListener('change', ()=>{
+  if(fileInput.files[0]) importJSON(fileInput.files[0]);
+  fileInput.value = '';
+});
+document.body.append(fileInput);
+
+async function guard(fn){
+  try { await fn(); }
+  catch(e){ console.error(e); toast(e.message || String(e), true); }
+}
+
+/* ==========================================================================
+   PRESETS
+   ========================================================================== */
+
+/* Brand presets. Palettes taken from the brand books, not from memory:
+   Best Practice — Paper #FAF9F6, Mist #F1EFE9, Sand #E8E3D6, Gold #D4AF37, Steel #1E3A5F.
+   iFCM GROUP   — White, Light #F5F5F7, Outline #DCDCE2, Navy #211C58, Red #E41227.
+   Both books cap their accent at roughly 14% of a surface, so gold and red appear
+   only as small, low-intensity points — never as a plane. */
+const PRESETS = [
+  { name:'BP · Бумага', dot:['#faf9f6','#d4af37'], patch:{
+    grad:{type:0, angle:150, scale:1.25, stops:[
+      {c:'#faf9f6',p:0},{c:'#f4f1e9',p:0.52},{c:'#e8e3d6',p:1}]},
+    mesh:{on:1, strength:0.68, falloff:1.5, drift:0.03, pts:[
+      {c:'#f0e2b8',x:0.24,y:0.22,r:0.76,i:0.55},
+      {c:'#d4af37',x:0.86,y:0.14,r:0.34,i:0.30},
+      {c:'#e7ebf1',x:0.52,y:0.88,r:0.70,i:0.40}]},
+    flow:{amt:0.20, scale:0.80, curl:0.35, speed:0.12, oct:2},
+    post:{bright:0.02, contrast:-0.02, sat:0.05, hue:0, vig:0.05, vigSoft:0.55},
+    grain:{amt:0.022, size:2, shadow:0.15, anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'BP · Сталь', dot:['#fbfaf7','#1e3a5f'], patch:{
+    grad:{type:0, angle:205, scale:1.2, stops:[
+      {c:'#fbfaf7',p:0},{c:'#edf0f5',p:0.5},{c:'#dde4ee',p:1}]},
+    mesh:{on:1, strength:0.72, falloff:1.5, drift:0.035, pts:[
+      {c:'#c6d4e6',x:0.24,y:0.28,r:0.76,i:0.60},
+      {c:'#9db0cb',x:0.86,y:0.86,r:0.62,i:0.35},
+      {c:'#d4af37',x:0.64,y:0.10,r:0.26,i:0.20}]},
+    flow:{amt:0.22, scale:0.75, curl:0.4, speed:0.12, oct:2},
+    post:{bright:0.02, contrast:-0.02, sat:0.05, hue:0, vig:0.06, vigSoft:0.5},
+    grain:{amt:0.022, size:2, shadow:0.18, anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'iFCM · Свет', dot:['#ffffff','#211c58'], patch:{
+    grad:{type:0, angle:160, scale:1.25, stops:[
+      {c:'#ffffff',p:0},{c:'#f5f5f7',p:0.55},{c:'#e6e6ee',p:1}]},
+    mesh:{on:1, strength:0.7, falloff:1.5, drift:0.03, pts:[
+      {c:'#dcdce2',x:0.20,y:0.26,r:0.76,i:0.55},
+      {c:'#b7b7ce',x:0.86,y:0.86,r:0.62,i:0.35},
+      {c:'#e41227',x:0.74,y:0.14,r:0.24,i:0.18}]},
+    flow:{amt:0.19, scale:0.8, curl:0.35, speed:0.11, oct:2},
+    post:{bright:0.02, contrast:-0.02, sat:0.05, hue:0, vig:0.04, vigSoft:0.55},
+    grain:{amt:0.02, size:2, shadow:0.15, anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'iFCM · Заря', dot:['#fdf1f3','#e41227'], patch:{
+    grad:{type:0, angle:135, scale:1.2, stops:[
+      {c:'#ffffff',p:0},{c:'#fdf1f3',p:0.5},{c:'#f2e7ec',p:1}]},
+    mesh:{on:1, strength:0.74, falloff:1.5, drift:0.04, pts:[
+      {c:'#f4a0aa',x:0.80,y:0.24,r:0.56,i:0.50},
+      {c:'#e41227',x:0.94,y:0.06,r:0.22,i:0.18},
+      {c:'#bcbad4',x:0.16,y:0.84,r:0.58,i:0.30}]},
+    flow:{amt:0.21, scale:0.78, curl:0.38, speed:0.12, oct:2},
+    post:{bright:0.02, contrast:-0.02, sat:0.05, hue:0, vig:0.05, vigSoft:0.55},
+    grain:{amt:0.02, size:2, shadow:0.15, anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Deep Space', dot:['#0a0a1f','#4b2ea8'], patch:{
+    grad:{type:0, angle:120, scale:1.2, stops:[{c:'#05060f',p:0},{c:'#141034',p:0.55},{c:'#2a1b5e',p:1}]},
+    mesh:{strength:0.95, falloff:2.2, drift:0.03, pts:[
+      {c:'#3b1e8f',x:0.24,y:0.20,r:0.62,i:0.8},
+      {c:'#7a2bd6',x:0.80,y:0.34,r:0.44,i:0.6},
+      {c:'#0b3a8c',x:0.55,y:0.90,r:0.55,i:0.5}]},
+    flow:{amt:0.22,scale:1.3,curl:0.6,speed:0.18,oct:4},
+    post:{bright:-0.02,contrast:0.08,sat:0.05,hue:0,vig:0.5,vigSoft:0.25},
+    grain:{amt:0.06,size:2,shadow:0.55,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Sunset Mesh', dot:['#ff5f3d','#7a3bc9'], patch:{
+    grad:{type:0, angle:145, scale:1.1, stops:[{c:'#ff6a3d',p:0},{c:'#ff2e88',p:0.5},{c:'#5a2bb8',p:1}]},
+    mesh:{strength:1, falloff:1.5, drift:0.06, pts:[
+      {c:'#ffb648',x:0.14,y:0.16,r:0.55,i:0.9},
+      {c:'#ff2e6e',x:0.72,y:0.28,r:0.5,i:0.85},
+      {c:'#5ee6c8',x:0.30,y:0.84,r:0.42,i:0.55},
+      {c:'#6a2bd6',x:0.90,y:0.86,r:0.5,i:0.75}]},
+    flow:{amt:0.3,scale:1.1,curl:0.55,speed:0.25,oct:3},
+    post:{bright:0,contrast:0.05,sat:0.12,hue:0,vig:0.18,vigSoft:0.4},
+    grain:{amt:0.04,size:2,shadow:0.3,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Cyber Waves', dot:['#12042a','#ff3d8f'], patch:{
+    grad:{type:0, angle:180, scale:1, stops:[{c:'#0a0418',p:0},{c:'#180a35',p:1}]},
+    mesh:{on:1, strength:0.7, falloff:2, drift:0.02, pts:[
+      {c:'#4a0f7a',x:0.75,y:0.25,r:0.6,i:0.7},
+      {c:'#7a1050',x:0.20,y:0.75,r:0.5,i:0.5}]},
+    flow:{amt:0.08,scale:1.4,curl:0.4,speed:0.15,oct:3},
+    wv:{on:1, n:5, angle:-8, amp:0.075, freq:0.62, phase:0.9, layerPhase:1.0,
+        offset:0.06, spread:0.72, gap:0.013, lines:14, lineW:0.13, soft:0.3,
+        fillA:0.95, lineA:0.8, depth:0.7, warp:0.05, speed:0.2, seed:2.4, rough:0.3,
+        cA:'#12062c', cB:'#4d0f5e', cL:'#ff4d9d', tint:1},
+    bl:{on:0},
+    post:{bright:0,contrast:0.14,sat:0.15,hue:0,vig:0.35,vigSoft:0.3},
+    grain:{amt:0.05,size:2,shadow:0.5,anim:0} }},
+
+  { name:'Aurora', dot:['#053b4a','#4ce6b0'], patch:{
+    grad:{type:0, angle:200, scale:1.2, stops:[{c:'#02131c',p:0},{c:'#073d4a',p:0.6},{c:'#0e6b5e',p:1}]},
+    mesh:{strength:1, falloff:1.8, drift:0.09, pts:[
+      {c:'#3ee6a0',x:0.30,y:0.30,r:0.55,i:0.75},
+      {c:'#38b6ff',x:0.72,y:0.18,r:0.45,i:0.65},
+      {c:'#8a5bff',x:0.60,y:0.85,r:0.5,i:0.5}]},
+    flow:{amt:0.42,scale:0.9,curl:0.75,speed:0.3,oct:4},
+    post:{bright:-0.02,contrast:0.1,sat:0.15,hue:0,vig:0.45,vigSoft:0.25},
+    grain:{amt:0.05,size:2,shadow:0.5,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Pastel Soft', dot:['#ffd8e8','#cfe4ff'], patch:{
+    grad:{type:1, angle:0, scale:1.4, stops:[{c:'#fdf3ff',p:0},{c:'#e6e9ff',p:0.55},{c:'#cfe6ff',p:1}]},
+    mesh:{strength:0.75, falloff:1.4, drift:0.05, pts:[
+      {c:'#ffd0e4',x:0.20,y:0.28,r:0.6,i:0.7},
+      {c:'#cfe1ff',x:0.80,y:0.30,r:0.55,i:0.65},
+      {c:'#fff0c9',x:0.55,y:0.88,r:0.5,i:0.5}]},
+    flow:{amt:0.28,scale:1.1,curl:0.5,speed:0.16,oct:3},
+    post:{bright:0.03,contrast:-0.08,sat:0.05,hue:0,vig:0.06,vigSoft:0.5},
+    grain:{amt:0.03,size:2,shadow:0.15,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Mono Noir', dot:['#0b1220','#1d3350'], patch:{
+    grad:{type:0, angle:145, scale:1.3, stops:[{c:'#05080f',p:0},{c:'#0d1626',p:0.6},{c:'#16283f',p:1}]},
+    mesh:{strength:0.6, falloff:2.4, drift:0.02, pts:[
+      {c:'#1b3a5e',x:0.72,y:0.24,r:0.7,i:0.6},
+      {c:'#0a1220',x:0.25,y:0.80,r:0.6,i:0.5}]},
+    flow:{amt:0.2,scale:1.2,curl:0.5,speed:0.12,oct:3},
+    post:{bright:-0.03,contrast:0.06,sat:-0.15,hue:0,vig:0.55,vigSoft:0.2},
+    grain:{amt:0.07,size:2,shadow:0.7,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Vapor Blinds', dot:['#2b0f5e','#00e5ff'], patch:{
+    grad:{type:0, angle:120, scale:1.1, stops:[{c:'#1a0640',p:0},{c:'#7a1a8f',p:0.5},{c:'#00c2d6',p:1}]},
+    mesh:{strength:0.9, falloff:1.6, drift:0.04, pts:[
+      {c:'#ff2e9a',x:0.24,y:0.24,r:0.5,i:0.8},
+      {c:'#00e5ff',x:0.78,y:0.72,r:0.5,i:0.7}]},
+    flow:{amt:0.18,scale:1.5,curl:0.45,speed:0.2,oct:3},
+    bl:{on:1, mode:0, angle:0, gap:46, width:0.5, soft:0.02, opacity:0.42, warp:0.04, fade:0, color:'#000000'},
+    post:{bright:0,contrast:0.12,sat:0.2,hue:0,vig:0.3,vigSoft:0.3},
+    grain:{amt:0.05,size:2,shadow:0.4,anim:0}, wv:{on:0} }},
+
+  { name:'Ocean Depth', dot:['#021a2e','#1f8fb8'], patch:{
+    grad:{type:0, angle:90, scale:1.2, stops:[{c:'#000c18',p:0},{c:'#032a45',p:0.55},{c:'#0a5f80',p:1}]},
+    mesh:{strength:0.85, falloff:2, drift:0.05, pts:[
+      {c:'#1a86b0',x:0.5,y:0.14,r:0.62,i:0.75},
+      {c:'#04304d',x:0.2,y:0.78,r:0.6,i:0.5},
+      {c:'#28d6c4',x:0.85,y:0.62,r:0.36,i:0.4}]},
+    flow:{amt:0.35,scale:1,curl:0.65,speed:0.14,oct:4},
+    post:{bright:-0.02,contrast:0.1,sat:0.05,hue:0,vig:0.5,vigSoft:0.22},
+    grain:{amt:0.06,size:2,shadow:0.6,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Peach Cream', dot:['#ffd9c0','#ffb08a'], patch:{
+    grad:{type:0, angle:160, scale:1.2, stops:[{c:'#ffe9dc',p:0},{c:'#ffc9a8',p:0.6},{c:'#ff9f7a',p:1}]},
+    mesh:{strength:0.6, falloff:1.5, drift:0.04, pts:[
+      {c:'#fff3e2',x:0.25,y:0.22,r:0.6,i:0.6},
+      {c:'#ffb08a',x:0.82,y:0.78,r:0.55,i:0.5}]},
+    flow:{amt:0.24,scale:1.2,curl:0.5,speed:0.14,oct:3},
+    post:{bright:0.02,contrast:-0.04,sat:0.06,hue:0,vig:0.08,vigSoft:0.45},
+    grain:{amt:0.035,size:2,shadow:0.2,anim:0}, wv:{on:0}, bl:{on:0} }},
+
+  { name:'Ribbon Light', dot:['#f2f4f8','#8aa4ff'], patch:{
+    grad:{type:0, angle:180, scale:1, stops:[{c:'#f7f8fc',p:0},{c:'#e6ecff',p:1}]},
+    mesh:{on:1, strength:0.5, falloff:1.8, drift:0.02, pts:[
+      {c:'#dbe4ff',x:0.7,y:0.2,r:0.6,i:0.5}]},
+    flow:{amt:0.06,scale:1.4,curl:0.4,speed:0.12,oct:3},
+    wv:{on:1, n:4, angle:-14, amp:0.055, freq:0.5, phase:0.75, layerPhase:1.1,
+        offset:0.14, spread:0.62, gap:0.016, lines:12, lineW:0.1, soft:0.4,
+        fillA:0.5, lineA:0.55, depth:0.55, warp:0.03, speed:0.18, seed:5.5, rough:0.2,
+        cA:'#dfe6ff', cB:'#a9bcff', cL:'#5b7cff', tint:0},
+    post:{bright:0.02,contrast:-0.02,sat:0.02,hue:0,vig:0.05,vigSoft:0.5},
+    grain:{amt:0.025,size:2,shadow:0.2,anim:0}, bl:{on:0} }}
+];
+
+function applyPreset(pr){
+  const keepCanvas = { w: S.canvas.w, h: S.canvas.h };
+  const keepTexts = JSON.parse(JSON.stringify(S.texts));
+  const keepExp = JSON.parse(JSON.stringify(S.exp));
+  const fresh = defaults();
+  mergeInto(fresh, pr.patch);
+  fresh.canvas = keepCanvas;
+  fresh.texts = keepTexts;
+  fresh.exp = keepExp;
+  S = fresh;
+  rebuildPanel(); rebuildTexts(); rebuildHandles(); changed(); pushHistory();
+  toast('Пресет: ' + pr.name);
+}
+
+/* --- harmonic randomiser --- */
+function randomize(){
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  const base = Math.random() * 360;
+  const scheme = pick([
+    [0, 25, -25],                    // analogous
+    [0, 120, 240],                   // triad
+    [0, 180, 30],                    // complementary + accent
+    [0, 40, 80, 200]                 // spread
+  ]);
+  const dark = Math.random() < 0.68;
+  const hues = scheme.map(d => base + d + rnd(-8, 8));
+
+  S.grad.type = pick([0,0,0,1,3]);
+  S.grad.angle = Math.round(rnd(0, 360));
+  S.grad.scale = +rnd(0.8, 1.6).toFixed(2);
+  const n = pick([2,3,3,4]);
+  S.grad.stops = Array.from({length:n}, (_, i)=>({
+    c: hsl2hex(hues[i % hues.length], rnd(0.35, 0.85),
+               dark ? rnd(0.06, 0.22) + i*0.05 : rnd(0.7, 0.92) - i*0.05),
+    p: +(i / (n - 1)).toFixed(3)
+  }));
+
+  const pn = 2 + Math.floor(Math.random() * 3);
+  S.mesh.on = 1;
+  S.mesh.strength = +rnd(0.55, 1.05).toFixed(2);
+  S.mesh.falloff = +rnd(1.2, 2.6).toFixed(2);
+  S.mesh.drift = +rnd(0, 0.09).toFixed(3);
+  S.mesh.pts = Array.from({length:pn}, (_, i)=>({
+    c: hsl2hex(hues[(i + 1) % hues.length] + rnd(-15, 15), rnd(0.55, 0.95),
+               dark ? rnd(0.35, 0.6) : rnd(0.62, 0.85)),
+    x: +rnd(0.08, 0.92).toFixed(3), y: +rnd(0.08, 0.92).toFixed(3),
+    r: +rnd(0.32, 0.72).toFixed(2), i: +rnd(0.4, 0.9).toFixed(2)
+  }));
+
+  S.flow.amt = +rnd(0.08, 0.45).toFixed(3);
+  S.flow.scale = +rnd(0.7, 2.4).toFixed(2);
+  S.flow.curl = +rnd(0.2, 0.9).toFixed(2);
+  S.flow.oct = pick([3,3,4]);
+
+  S.wv.on = Math.random() < 0.3 ? 1 : 0;
+  if(S.wv.on){
+    S.wv.n = 3 + Math.floor(Math.random() * 5);
+    S.wv.angle = +rnd(-20, 20).toFixed(1);
+    S.wv.amp = +rnd(0.04, 0.13).toFixed(3);
+    S.wv.freq = +rnd(0.4, 1.1).toFixed(2);
+    S.wv.phase = +(rnd(0.5, 1.2) * (Math.random() < 0.5 ? -1 : 1)).toFixed(2);
+    S.wv.layerPhase = +rnd(0.5, 1.4).toFixed(2);
+    S.wv.offset = +rnd(-0.05, 0.2).toFixed(2);
+    S.wv.spread = +rnd(0.45, 0.95).toFixed(2);
+    S.wv.gap = +rnd(0.008, 0.02).toFixed(4);
+    S.wv.lines = Math.round(rnd(8, 26));
+    S.wv.seed = +rnd(0, 12).toFixed(2);
+    S.wv.cA = hsl2hex(hues[0], 0.7, dark ? 0.08 : 0.86);
+    S.wv.cB = hsl2hex(hues[1 % hues.length], 0.75, dark ? 0.22 : 0.7);
+    S.wv.cL = hsl2hex(hues[2 % hues.length], 0.9, dark ? 0.65 : 0.45);
+    S.wv.tint = Math.random() < 0.5 ? 1 : 0;
+  }
+
+  S.bl.on = Math.random() < 0.28 ? 1 : 0;
+  if(S.bl.on){
+    S.bl.mode = pick([0,0,1,3]);
+    S.bl.angle = +rnd(-90, 90).toFixed(1);
+    S.bl.gap = Math.round(rnd(12, 120));
+    S.bl.width = +rnd(0.15, 0.7).toFixed(2);
+    S.bl.soft = +rnd(0, 0.2).toFixed(3);
+    S.bl.opacity = +rnd(0.15, 0.55).toFixed(2);
+    S.bl.warp = +rnd(0, 0.12).toFixed(3);
+  }
+
+  S.post.vig = +rnd(0.05, 0.6).toFixed(2);
+  S.post.contrast = +rnd(-0.05, 0.18).toFixed(2);
+  S.post.sat = +rnd(-0.05, 0.2).toFixed(2);
+  S.grain.amt = +rnd(0.01, 0.1).toFixed(3);
+
+  rebuildPanel(); rebuildHandles(); changed(); pushHistory();
+}
+
+function buildPresets(p){
+  section(p, 'Пресеты', b=>{
+    const chips = el('div', {class:'chips'});
+    for(const pr of PRESETS){
+      const dot = el('i');
+      dot.style.background = 'linear-gradient(135deg,' + pr.dot[0] + ',' + pr.dot[1] + ')';
+      chips.append(el('div', {class:'chip', onclick:()=>applyPreset(pr)}, dot,
+                     el('span', {text:pr.name})));
+    }
+    b.append(chips);
+    b.append(el('div', {class:'btnrow'},
+      el('button', {class:'btn', text:'🎲 Случайный фон', onclick:randomize}),
+      el('button', {class:'btn', text:'↺ Сброс', onclick:()=>{
+        const t = JSON.parse(JSON.stringify(S.texts)), c = {...S.canvas};
+        S = defaults(); S.texts = t; S.canvas = c;
+        rebuildPanel(); rebuildTexts(); rebuildHandles(); changed(); pushHistory();
+        toast('Настройки сброшены');
+      }})));
+    b.append(el('div', {class:'hint',
+      text:'Пресет меняет только фон — текст и размер холста остаются на месте.'}));
+  });
+}
+
+/* ==========================================================================
+   HOT KEYS + WIRING
+   ========================================================================== */
+
+function setPlaying(v){
+  S.anim.playing = !!v;
+  document.getElementById('btnPlay').textContent = v ? '⏸ Пауза' : '▶ Пуск';
+  if(v) lastT = performance.now();
+  invalidate();
+}
+
+document.addEventListener('keydown', e=>{
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea' || tag === 'select' ||
+                 e.target.isContentEditable;
+  const meta = e.metaKey || e.ctrlKey;
+
+  if(meta && e.key.toLowerCase() === 'z'){
+    e.preventDefault(); goHistory(e.shiftKey ? 1 : -1); return;
+  }
+  if(typing) return;
+
+  if(e.code === 'Space'){ e.preventDefault(); setPlaying(!S.anim.playing); return; }
+  if(e.key === 'r' || e.key === 'R'){ randomize(); return; }
+  if(e.key === 'e' || e.key === 'E'){ guard(()=>exportRaster('image/png','png')); return; }
+
+  if(selText >= 0 && e.key.startsWith('Arrow')){
+    e.preventDefault();
+    const step = e.shiftKey ? 10 : 1;
+    const t = S.texts[selText];
+    if(e.key === 'ArrowLeft')  t.x -= step / S.canvas.w;
+    if(e.key === 'ArrowRight') t.x += step / S.canvas.w;
+    if(e.key === 'ArrowUp')    t.y -= step / S.canvas.h;
+    if(e.key === 'ArrowDown')  t.y += step / S.canvas.h;
+    t.x = +t.x.toFixed(4); t.y = +t.y.toFixed(4);
+    styleText(selText); changed();
+  }
+});
+
+document.getElementById('btnPlay').addEventListener('click', ()=> setPlaying(!S.anim.playing));
+document.getElementById('btnRandom').addEventListener('click', randomize);
+document.getElementById('btnFit').addEventListener('click', fitStage);
+document.getElementById('btnUndo').addEventListener('click', ()=> goHistory(-1));
+document.getElementById('btnRedo').addEventListener('click', ()=> goHistory(1));
+document.getElementById('collapse').addEventListener('click', ()=>{
+  const app = document.getElementById('app');
+  app.classList.toggle('collapsed');
+  document.getElementById('collapse').textContent = app.classList.contains('collapsed') ? '◂' : '▸';
+  requestAnimationFrame(fitStage);
+});
+
+window.addEventListener('resize', ()=>{ fitStage(); restyleAllTexts(); });
+
+/* ==========================================================================
+   BOOT
+   ========================================================================== */
+
+loadLocal();
+rebuildPanel();
+rebuildTexts();
+rebuildHandles();
+fitStage();
+setPlaying(S.anim.playing);
+pushHistory();
+requestAnimationFrame(tick);
+document.fonts.ready.then(restyleAllTexts);
+</script>
